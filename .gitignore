@@ -7,7 +7,7 @@ pnpm-debug.log*
 .pnpm-store/
 
 # Production builds
-dist/
+--dist/
 build/
 
 # Runtime data
