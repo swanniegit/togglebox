@@ -4,6 +4,11 @@ import { IframePreview } from './IframePreview';
 import { generateSixCardsHtmlContent } from '../utils/sixCardsHtmlGenerator';
 import { ColorPicker } from './ColorPicker';
 import ColorSystemPreview from './ColorSystemPreview';
+import ThemeSelector from './ThemeSelector';
+import { consumeTransferButton, consumePickerThemeColor } from '../utils/storageBridge';
+import { startPayfastCheckout, isPayfastReady } from '../utils/payfast';
+import ExportActions from './ExportActions';
+import CardEditor from './CardEditor';
 
 /**
  * SixCardsInteractive - Individual customizable cards system
@@ -109,6 +114,8 @@ export const SixCardsInteractive = ({ className = '' }) => {
   const [error, setError] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
   const [pickerBaseColor, setPickerBaseColor] = useState(null);
+  const [paywallUnlocked, setPaywallUnlocked] = useState(false);
+  const [showInlinePicker, setShowInlinePicker] = useState(false);
 
   // Predefined gradient options with comprehensive color themes
   const predefinedGradients = {
@@ -268,8 +275,8 @@ export const SixCardsInteractive = ({ className = '' }) => {
   };
 
   // Helper: create theme from color picker base (must be declared before use)
-  const generateFromPickerTheme = () => {
-    const base = pickerBaseColor || '#3b82f6';
+  const generateFromPickerTheme = (baseOverride) => {
+    const base = baseOverride || pickerBaseColor || '#3b82f6';
     const lighten = (hex, amount) => {
       const num = parseInt(hex.replace('#', ''), 16);
       const amt = Math.round(2.55 * amount);
@@ -278,6 +285,7 @@ export const SixCardsInteractive = ({ className = '' }) => {
       const B = Math.min(255, (num & 0x0000FF) + amt);
       return "#" + (0x1000000 + R * 0x10000 + G * 0x100 + B).toString(16).slice(1);
     };
+    const hexToTint = (hex, amount) => lighten(hex, amount);
     const start = lighten(base, 0);
     const end = lighten(base, -20);
     return {
@@ -291,12 +299,12 @@ export const SixCardsInteractive = ({ className = '' }) => {
         warning: '#f59e0b',
         danger: '#ef4444',
         cardTints: [
-          lighten(base, 85),
-          lighten(base, 70),
-          lighten(base, 60),
-          lighten(base, 50),
-          lighten(base, 40),
-          lighten(base, 30)
+          hexToTint(base, 85),
+          hexToTint(base, 70),
+          hexToTint(base, 60),
+          hexToTint(base, 50),
+          hexToTint(base, 40),
+          hexToTint(base, 30)
         ]
       }
     };
@@ -318,12 +326,56 @@ export const SixCardsInteractive = ({ className = '' }) => {
       const b = bigint & 255;
       return `rgba(${r}, ${g}, ${b}, ${alpha})`;
     };
+    const hexToTint = (hex, amount) => {
+      const num = parseInt(hex.replace('#', ''), 16);
+      const amt = Math.round(2.55 * amount);
+      const R = Math.min(255, (num >> 16) + amt);
+      const G = Math.min(255, (num >> 8 & 0x00FF) + amt);
+      const B = Math.min(255, (num & 0x0000FF) + amt);
+      return "#" + (0x1000000 + R * 0x10000 + G * 0x100 + B).toString(16).slice(1);
+    };
+    const hexToRgbInt = (hex) => {
+      const sanitized = hex.replace('#', '');
+      const bigint = parseInt(sanitized, 16);
+      return {
+        r: (bigint >> 16) & 255,
+        g: (bigint >> 8) & 255,
+        b: bigint & 255,
+      };
+    };
+    const toHex = (n) => n.toString(16).padStart(2, '0');
+    const mixColors = (hex1, hex2, ratio = 0.5) => {
+      const c1 = hexToRgbInt(hex1);
+      const c2 = hexToRgbInt(hex2);
+      const r = Math.round(c1.r * (1 - ratio) + c2.r * ratio);
+      const g = Math.round(c1.g * (1 - ratio) + c2.g * ratio);
+      const b = Math.round(c1.b * (1 - ratio) + c2.b * ratio);
+      return `#${toHex(r)}${toHex(g)}${toHex(b)}`;
+    };
+    const chooseTextColor = (hex) => {
+      const sanitized = hex.replace('#', '');
+      const bigint = parseInt(sanitized, 16);
+      let r = (bigint >> 16) & 255;
+      let g = (bigint >> 8) & 255;
+      let b = bigint & 255;
+      // sRGB to linear
+      const srgbToLin = (c) => {
+        c = c / 255;
+        return c <= 0.03928 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4);
+      };
+      const R = srgbToLin(r), G = srgbToLin(g), B = srgbToLin(b);
+      const luminance = 0.2126 * R + 0.7152 * G + 0.0722 * B;
+      // Slightly more aggressive threshold so mid-darks switch to light text
+      return luminance > 0.55 ? '#111827' : '#ffffff';
+    };
     
     const start = currentGradient.start;
     const end = currentGradient.end;
-    const gradientOverlay = gradientOptions.enableGradient
-      ? `linear-gradient(${gradientOptions.direction}, ${hexToRgba(start, 0.28)}, ${hexToRgba(end, 0.28)})`
-      : null;
+    const overlayAlpha = 0.35; // allow base card tints to remain distinct
+    const gradientImage = gradientOptions.enableGradient
+      ? `linear-gradient(${gradientOptions.direction}, ${hexToRgba(start, overlayAlpha)}, ${hexToRgba(end, overlayAlpha)})`
+      : 'none';
+    const textOnGradient = chooseTextColor(mixColors(start, end, 0.5));
     
     const themeName = gradientOptions.selectedGradient === 'fromPicker' && pickerBaseColor
       ? `Color Picker Base (${pickerBaseColor})`
@@ -338,9 +390,27 @@ export const SixCardsInteractive = ({ className = '' }) => {
         line-height: 1.5;
       }
 
+      /* Design Tokens derived from current theme */
+      :root {
+        --tb-primary: ${buttonStyles.primary.bg};
+        --tb-primary-hover: ${buttonStyles.primary.hover};
+        --tb-secondary: ${buttonStyles.secondary.bg};
+        --tb-success: ${buttonStyles.ok.bg};
+        --tb-warning: ${alertStyles.warning.border};
+        --tb-danger: ${buttonStyles.delete.bg};
+        --tb-neutral: #e5e7eb;
+        --tb-grad-start: ${start};
+        --tb-grad-end: ${end};
+        --tb-text-dark: #111827;
+        --tb-text: #374151;
+        --tb-radius: 9999px;
+      }
+
       /* Individual Card Styles - Export Ready */
       .card-1 {
-        background: ${gradientOverlay ? `${gradientOverlay}, ${cards.card1.backgroundColor}` : cards.card1.backgroundColor} !important;
+        background-color: ${cards.card1.backgroundColor} !important;
+        background-image: ${gradientImage} !important;
+        color: ${gradientOptions.enableGradient ? textOnGradient : chooseTextColor(cards.card1.backgroundColor)} !important;
         border-radius: ${cards.card1.borderRadius}px !important;
         padding: ${cards.card1.padding}px !important;
         border: ${cards.card1.borderWidth}px solid ${cards.card1.borderColor} !important;
@@ -348,9 +418,12 @@ export const SixCardsInteractive = ({ className = '' }) => {
         margin-bottom: 16px !important;
         ${generalStyles.animations ? 'transition: all 0.3s ease !important;' : ''}
       }
+      .card-1 * { color: ${gradientOptions.enableGradient ? textOnGradient : chooseTextColor(cards.card1.backgroundColor)} !important; }
 
       .card-2 {
-        background: ${gradientOverlay ? `${gradientOverlay}, ${cards.card2.backgroundColor}` : cards.card2.backgroundColor} !important;
+        background-color: ${cards.card2.backgroundColor} !important;
+        background-image: ${gradientImage} !important;
+        color: ${gradientOptions.enableGradient ? textOnGradient : chooseTextColor(cards.card2.backgroundColor)} !important;
         border-radius: ${cards.card2.borderRadius}px !important;
         padding: ${cards.card2.padding}px !important;
         border: ${cards.card2.borderWidth}px solid ${cards.card2.borderColor} !important;
@@ -358,9 +431,12 @@ export const SixCardsInteractive = ({ className = '' }) => {
         margin-bottom: 16px !important;
         ${generalStyles.animations ? 'transition: all 0.3s ease !important;' : ''}
       }
+      .card-2 * { color: ${gradientOptions.enableGradient ? textOnGradient : chooseTextColor(cards.card2.backgroundColor)} !important; }
 
       .card-3 {
-        background: ${gradientOverlay ? `${gradientOverlay}, ${cards.card3.backgroundColor}` : cards.card3.backgroundColor} !important;
+        background-color: ${cards.card3.backgroundColor} !important;
+        background-image: ${gradientImage} !important;
+        color: ${gradientOptions.enableGradient ? textOnGradient : chooseTextColor(cards.card3.backgroundColor)} !important;
         border-radius: ${cards.card3.borderRadius}px !important;
         padding: ${cards.card3.padding}px !important;
         border: ${cards.card3.borderWidth}px solid ${cards.card3.borderColor} !important;
@@ -368,9 +444,12 @@ export const SixCardsInteractive = ({ className = '' }) => {
         margin-bottom: 16px !important;
         ${generalStyles.animations ? 'transition: all 0.3s ease !important;' : ''}
       }
+      .card-3 * { color: ${gradientOptions.enableGradient ? textOnGradient : chooseTextColor(cards.card3.backgroundColor)} !important; }
 
       .card-4 {
-        background: ${gradientOverlay ? `${gradientOverlay}, ${cards.card4.backgroundColor}` : cards.card4.backgroundColor} !important;
+        background-color: ${cards.card4.backgroundColor} !important;
+        background-image: ${gradientImage} !important;
+        color: ${gradientOptions.enableGradient ? textOnGradient : chooseTextColor(cards.card4.backgroundColor)} !important;
         border-radius: ${cards.card4.borderRadius}px !important;
         padding: ${cards.card4.padding}px !important;
         border: ${cards.card4.borderWidth}px solid ${cards.card4.borderColor} !important;
@@ -378,9 +457,12 @@ export const SixCardsInteractive = ({ className = '' }) => {
         margin-bottom: 16px !important;
         ${generalStyles.animations ? 'transition: all 0.3s ease !important;' : ''}
       }
+      .card-4 * { color: ${gradientOptions.enableGradient ? textOnGradient : chooseTextColor(cards.card4.backgroundColor)} !important; }
 
       .card-5 {
-        background: ${gradientOverlay ? `${gradientOverlay}, ${cards.card5.backgroundColor}` : cards.card5.backgroundColor} !important;
+        background-color: ${cards.card5.backgroundColor} !important;
+        background-image: ${gradientImage} !important;
+        color: ${gradientOptions.enableGradient ? textOnGradient : chooseTextColor(cards.card5.backgroundColor)} !important;
         border-radius: ${cards.card5.borderRadius}px !important;
         padding: ${cards.card5.padding}px !important;
         border: ${cards.card5.borderWidth}px solid ${cards.card5.borderColor} !important;
@@ -388,9 +470,12 @@ export const SixCardsInteractive = ({ className = '' }) => {
         margin-bottom: 16px !important;
         ${generalStyles.animations ? 'transition: all 0.3s ease !important;' : ''}
       }
+      .card-5 * { color: ${gradientOptions.enableGradient ? textOnGradient : chooseTextColor(cards.card5.backgroundColor)} !important; }
 
       .card-6 {
-        background: ${gradientOverlay ? `${gradientOverlay}, ${cards.card6.backgroundColor}` : cards.card6.backgroundColor} !important;
+        background-color: ${cards.card6.backgroundColor} !important;
+        background-image: ${gradientImage} !important;
+        color: ${gradientOptions.enableGradient ? textOnGradient : chooseTextColor(cards.card6.backgroundColor)} !important;
         border-radius: ${cards.card6.borderRadius}px !important;
         padding: ${cards.card6.padding}px !important;
         border: ${cards.card6.borderWidth}px solid ${cards.card6.borderColor} !important;
@@ -398,6 +483,7 @@ export const SixCardsInteractive = ({ className = '' }) => {
         margin-bottom: 16px !important;
         ${generalStyles.animations ? 'transition: all 0.3s ease !important;' : ''}
       }
+      .card-6 * { color: ${gradientOptions.enableGradient ? textOnGradient : chooseTextColor(cards.card6.backgroundColor)} !important; }
 
       /* Hover effects for all cards */
       .card-1:hover, .card-2:hover, .card-3:hover, .card-4:hover, .card-5:hover, .card-6:hover {
@@ -439,6 +525,93 @@ export const SixCardsInteractive = ({ className = '' }) => {
         background: ${buttonStyles.secondary.hover} !important;
         ${generalStyles.animations ? 'transform: translateY(-1px) !important;' : ''}
       }
+
+      /* Badges */
+      .badge { display:inline-flex; align-items:center; gap:6px; padding: 4px 10px; border-radius: 9999px; font-weight:600; font-size:12px; letter-spacing:.2px; }
+      .badge-primary { background: var(--tb-primary); color: #fff; box-shadow: 0 1px 0 rgba(0,0,0,.05), inset 0 -1px 0 rgba(0,0,0,.1); }
+      .badge-success { background: var(--tb-success); color: #fff; box-shadow: 0 1px 0 rgba(0,0,0,.05), inset 0 -1px 0 rgba(0,0,0,.1); }
+      .badge-warning { background: var(--tb-warning); color: #fff; box-shadow: 0 1px 0 rgba(0,0,0,.05), inset 0 -1px 0 rgba(0,0,0,.1); }
+      .badge-danger { background: var(--tb-danger); color: #fff; box-shadow: 0 1px 0 rgba(0,0,0,.05), inset 0 -1px 0 rgba(0,0,0,.1); }
+      .badge-neutral { background: var(--tb-neutral); color: var(--tb-text); box-shadow: inset 0 -1px 0 rgba(0,0,0,.06); }
+
+      /* Chips */
+      .chip { display:inline-flex; align-items:center; padding: 6px 12px; border-radius: 9999px; font-weight:500; font-size:12px; }
+      .chip-primary { background: rgba(59,130,246,.12); color: var(--tb-primary); border: 1px solid rgba(59,130,246,.25); }
+      .chip-success { background: rgba(16,185,129,.12); color: var(--tb-success); border: 1px solid rgba(16,185,129,.25); }
+      .chip-warning { background: rgba(245,158,11,.12); color: var(--tb-warning); border: 1px solid rgba(245,158,11,.25); }
+      .chip-danger { background: rgba(239,68,68,.12); color: var(--tb-danger); border: 1px solid rgba(239,68,68,.25); }
+      .chip-outline { background:#fff; color: var(--tb-primary); border: 1px solid var(--tb-primary); }
+
+      /* Tabs */
+      .tabs { display:flex; gap:16px; border-bottom: 1px solid #e5e7eb; }
+      .tab { position:relative; padding: 8px 4px; color:#6b7280; font-weight:600; }
+      .tab.active { color: var(--tb-primary); }
+      .tab.active:after { content:''; position:absolute; left:0; right:0; bottom:-1px; height:2px; background: linear-gradient(90deg, var(--tb-grad-start), var(--tb-grad-end)); border-radius:2px; }
+
+      /* Progress */
+      .progress { width:100%; height:10px; border-radius:9999px; background:#e5e7eb; overflow:hidden; box-shadow: inset 0 1px 2px rgba(0,0,0,.06); }
+      .progress-bar { height:100%; background: linear-gradient(90deg, var(--tb-grad-start), var(--tb-grad-end)); box-shadow: 0 1px 2px rgba(0,0,0,.08); }
+
+      /* Links */
+      .link { color: var(--tb-primary); text-decoration:none; font-weight:500; }
+      .link:hover { text-decoration:underline; }
+
+      /* Avatars */
+      .avatar { width:40px; height:40px; border-radius:9999px; box-shadow: 0 2px 6px rgba(0,0,0,.12), inset 0 -2px 6px rgba(255,255,255,.25); border:3px solid #fff; }
+      .avatar-primary { background: var(--tb-primary); outline: 2px solid var(--tb-grad-end); }
+      .avatar-success { background: var(--tb-success); outline: 2px solid var(--tb-primary); }
+      .avatar-warning { background: var(--tb-warning); outline: 2px solid var(--tb-primary); }
+
+      /* Breadcrumbs */
+      .breadcrumbs a { color: var(--tb-primary); text-decoration:none; }
+      .breadcrumbs .divider { color:#9ca3af; }
+      .breadcrumbs .current { color:#6b7280; }
+
+      /* Pagination */
+      .pagination { display:flex; align-items:center; gap:8px; }
+      .page { padding:8px 10px; border-radius:8px; border:1px solid #e5e7eb; background:#fff; }
+      .page-active { background: var(--tb-primary); border-color: var(--tb-primary); color:#fff; box-shadow: 0 1px 2px rgba(0,0,0,.08); }
+
+      /* Pills (for table statuses) */
+      .pill { padding: 3px 8px; border-radius: 9999px; color:#fff; font-size:12px; font-weight:600; }
+      .pill-success { background: var(--tb-success); }
+      .pill-warning { background: var(--tb-warning); }
+      .pill-danger { background: var(--tb-danger); }
+
+      /* Table */
+      .table thead tr { background: linear-gradient(90deg, var(--tb-grad-start), var(--tb-grad-end)); color:#fff; }
+      .table tbody tr { background:#fff; }
+
+      /* Toggles */
+      .toggle { width:44px; height:24px; border-radius:9999px; position:relative; background:#e5e7eb; transition: background .2s ease; }
+      .toggle .knob { position:absolute; top:2px; left:2px; width:20px; height:20px; background:#fff; border-radius:9999px; box-shadow:0 1px 2px rgba(0,0,0,.1); transition: transform .2s ease; }
+      .toggle.on { background: var(--tb-primary); }
+      .toggle.on .knob { transform: translateX(20px); }
+
+      /* Toasts */
+      .toast { display:flex; gap:10px; align-items:flex-start; padding:12px 14px; border-radius:10px; background:#fff; border:1px solid #e5e7eb; box-shadow: 0 4px 8px rgba(0,0,0,.06); }
+      .toast .icon { width:24px; height:24px; border-radius:9999px; display:inline-flex; align-items:center; justify-content:center; color:#fff; font-size:12px; }
+      .toast-success { border-left:4px solid var(--tb-success); }
+      .toast-success .icon { background: var(--tb-success); }
+      .toast-warning { border-left:4px solid var(--tb-warning); }
+      .toast-warning .icon { background: var(--tb-warning); }
+      .toast-danger { border-left:4px solid var(--tb-danger); }
+      .toast-danger .icon { background: var(--tb-danger); }
+      .toast-message { border-left:4px solid var(--tb-primary); }
+      .toast-message .icon { background: var(--tb-primary); }
+
+      /* Code block */
+      .code-block { background:#0b1220; color:#e5e7eb; border-radius:12px; border:1px solid #0f172a; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; padding:14px 16px; overflow:auto; box-shadow: inset 0 1px 0 rgba(255,255,255,.04); }
+      .code-block .k { color: var(--tb-warning); }
+      .code-block .fn { color: var(--tb-success); }
+      .code-block .p { color: #93c5fd; }
+      .code-block .s { color: #f472b6; }
+      .code-block .c { color:#64748b; }
+
+      /* Mini bar chart */
+      .chart { display:grid; gap:10px; }
+      .bar { height:10px; background:#e5e7eb; border-radius:9999px; overflow:hidden; box-shadow: inset 0 1px 2px rgba(0,0,0,.06); }
+      .bar-fill { height:100%; background: linear-gradient(90deg, var(--tb-grad-start), var(--tb-grad-end)); border-radius:9999px; box-shadow: 0 1px 2px rgba(0,0,0,.08); }
 
       .btn-delete {
         background: linear-gradient(135deg, ${buttonStyles.delete.bg}, ${buttonStyles.delete.hover}) !important;
@@ -594,7 +767,17 @@ export const SixCardsInteractive = ({ className = '' }) => {
       : predefinedGradients[gradientOptions.selectedGradient];
 
   // Generate HTML content with all 6 cards
-  const htmlContent = generateSixCardsHtmlContent(alertStyles);
+  const htmlContent = generateSixCardsHtmlContent(alertStyles, {
+    primary: buttonStyles.primary.bg,
+    primaryHover: buttonStyles.primary.hover,
+    secondary: buttonStyles.secondary.bg,
+    success: buttonStyles.ok.bg,
+    warning: alertStyles.warning?.border,
+    danger: buttonStyles.delete.bg,
+    neutral: '#e5e7eb',
+    start: activeGradient.start,
+    end: activeGradient.end,
+  });
 
   const handleIframeLoad = useCallback(() => {
     setIsLoading(false);
@@ -629,11 +812,11 @@ export const SixCardsInteractive = ({ className = '' }) => {
   };
 
   // Apply gradient theme to all components for cohesive design
-  const applyGradientTheme = (gradientKey) => {
+  const applyGradientTheme = (gradientKey, opts = {}) => {
     const currentGradient = gradientKey === 'custom'
       ? generateCustomTheme()
       : gradientKey === 'fromPicker'
-        ? generateFromPickerTheme()
+        ? generateFromPickerTheme(opts.base)
         : predefinedGradients[gradientKey];
     const theme = currentGradient.theme;
     
@@ -675,14 +858,24 @@ export const SixCardsInteractive = ({ className = '' }) => {
       }
     });
 
-    // Update card colors based on gradient theme
+    // Update card colors based on gradient theme with fallback to generated tints
+    const tints = theme.cardTints && theme.cardTints.length === 6
+      ? theme.cardTints
+      : [
+          theme.primary,
+          hexToTint(theme.primary, 85),
+          hexToTint(theme.secondary || theme.primary, 70),
+          hexToTint(theme.primary, 60),
+          hexToTint(theme.secondary || theme.primary, 50),
+          hexToTint(theme.primary, 40),
+        ];
     setCards(prev => ({
-      card1: { ...prev.card1, backgroundColor: theme.cardTints[0], borderColor: theme.primary },
-      card2: { ...prev.card2, backgroundColor: theme.cardTints[1], borderColor: theme.secondary },
-      card3: { ...prev.card3, backgroundColor: theme.cardTints[2], borderColor: theme.primary },
-      card4: { ...prev.card4, backgroundColor: theme.cardTints[3], borderColor: theme.success },
-      card5: { ...prev.card5, backgroundColor: theme.cardTints[4], borderColor: theme.warning },
-      card6: { ...prev.card6, backgroundColor: theme.cardTints[5], borderColor: theme.secondary }
+      card1: { ...prev.card1, backgroundColor: tints[0], borderColor: theme.primary },
+      card2: { ...prev.card2, backgroundColor: tints[1], borderColor: theme.secondary || theme.primary },
+      card3: { ...prev.card3, backgroundColor: tints[2], borderColor: theme.primary },
+      card4: { ...prev.card4, backgroundColor: tints[3], borderColor: theme.success || theme.primary },
+      card5: { ...prev.card5, backgroundColor: tints[4], borderColor: theme.warning || theme.secondary || theme.primary },
+      card6: { ...prev.card6, backgroundColor: tints[5], borderColor: theme.secondary || theme.primary }
     }));
   };
 
@@ -690,25 +883,21 @@ export const SixCardsInteractive = ({ className = '' }) => {
   useEffect(() => {
     applyGradientTheme(gradientOptions.selectedGradient);
     // Intake color handed off from color picker demo (one-shot)
-    try {
-      const raw = localStorage.getItem('togglebox_transfer');
-      if (raw) {
-        const data = JSON.parse(raw);
-        if (data?.type === 'button' && data?.target && data?.color) {
-          updateButtonStyle(data.target, 'bg', data.color);
-          localStorage.removeItem('togglebox_transfer');
-        }
-      }
-    } catch {}
-    // Load base color from color picker, if provided
-    try {
-      const base = localStorage.getItem('togglebox_theme_color');
-      if (base) {
-        setPickerBaseColor(base);
-        localStorage.removeItem('togglebox_theme_color');
-      }
-    } catch {}
+    const transfer = consumeTransferButton();
+    if (transfer && transfer.type === 'button' && transfer.target && transfer.color) {
+      updateButtonStyle(transfer.target, 'bg', transfer.color);
+    }
+    // Load base color from color picker, if provided (one-shot)
+    const base = consumePickerThemeColor();
+    if (base) setPickerBaseColor(base);
   }, []); // Only run once on mount
+
+  // If using From Color Picker theme, re-apply when base color changes
+  useEffect(() => {
+    if (gradientOptions.selectedGradient === 'fromPicker' && pickerBaseColor) {
+      applyGradientTheme('fromPicker', { base: pickerBaseColor });
+    }
+  }, [pickerBaseColor]);
 
   const updateGradientOption = (property, value) => {
     setGradientOptions(prev => ({
@@ -756,79 +945,142 @@ export const SixCardsInteractive = ({ className = '' }) => {
     URL.revokeObjectURL(url);
   };
 
+  // Export demo index.html including all components; expects CSS file in same folder
+  const exportDemoHtml = () => {
+    const html = `<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>ToggleBox Demo</title>
+    <link rel="stylesheet" href="./six-cards-stylesheet.css" />
+    <style>body{background:#f8fafc;padding:24px} .container{max-width:1200px;margin:0 auto}</style>
+  </head>
+  <body>
+    <div class="container">
+${generateSixCardsHtmlContent(alertStyles, {
+  primary: buttonStyles.primary.bg,
+  primaryHover: buttonStyles.primary.hover,
+  secondary: buttonStyles.secondary.bg,
+  success: buttonStyles.ok.bg,
+  warning: alertStyles.warning?.border,
+  danger: buttonStyles.delete.bg,
+  neutral: '#e5e7eb',
+  start: activeGradient.start,
+  end: activeGradient.end,
+})}
+    </div>
+  </body>
+</html>`;
+    const blob = new Blob([html], { type: 'text/html' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'index.html';
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  // Build and copy agent-safe integration instructions
+  const copyAgentInstructions = async () => {
+    const themeLabel = gradientOptions.selectedGradient === 'fromPicker' && pickerBaseColor
+      ? `From Color Picker (${pickerBaseColor})`
+      : predefinedGradients[gradientOptions.selectedGradient]?.name || 'Custom Theme';
+
+    const instructions = `Integrate ToggleBox stylesheet (Theme: ${themeLabel}).
+
+1) Add the CSS file to your project and include in the <head> of every page:
+<link rel="stylesheet" href="/assets/css/six-cards-stylesheet.css" />
+
+2) Use the provided utility classes without renaming:
+   - Cards: .card-1 ... .card-6
+   - Buttons: .btn-primary, .btn-secondary, .btn-submit, .btn-ok, .btn-delete
+   - Alerts: .alert-error, .alert-warning, .alert-message, .alert-success
+
+3) HTML example:
+<div class="card-1"><h3>Title</h3><p class="preview-text">Content</p><button class="btn-primary">Action</button></div>
+
+4) Guardrails for agents (do NOT proceed without asking the user):
+   - Do not remove or rename any .card-* / .btn-* / .alert-* classes.
+   - Do not change background-color or background-image on .card-* rules; both are required for solid/gradient compatibility.
+   - Do not reduce color contrast or change text colors on cards/buttons to values that may break readability.
+   - Do not delete border-radius, spacing, or box-shadow tokens from these classes.
+   - If a design needs override, add new classes or wrappers; avoid editing the exported classes directly.
+   - Before altering the stylesheet, explicitly ask: "Will this change reduce contrast, remove gradients, rename classes, or otherwise degrade the visual system?" If yes, stop and request confirmation.
+
+5) Optional customization: create CSS variables on :root and map them to these classes; keep original declarations as fallbacks.
+`;
+
+    try {
+      await navigator.clipboard.writeText(instructions);
+      window.alert('Agent instructions copied to clipboard.');
+    } catch (e) {
+      console.error('Clipboard copy failed', e);
+    }
+  };
+
+  const handleUnlock = () => {
+    if (isPayfastReady()) {
+      // Start PayFast with base $10; upsell for +$5 via a follow-up flow could be added
+      startPayfastCheckout({ amount: 10.0, itemName: 'ToggleBox CSS Export', itemDescription: 'Unlock stylesheet export' });
+      // After redirect back from PayFast you can mark unlocked via server ITN; for demo, keep confirm fallback too
+    } else {
+      // Fallback confirm flow until credentials/ITN are configured
+      const confirmCss = window.confirm('Unlock CSS + Demo export for $10? Click Cancel to abort.');
+      if (!confirmCss) return;
+      const confirmAgent = window.confirm('Add AI Instructions unlock for +$5? Click OK to include, Cancel to skip.');
+      setPaywallUnlocked(true);
+      if (confirmAgent) {}
+    }
+  };
+
   const currentCard = cards[selectedCard];
 
   return (
     <div className={`six-cards-interactive ${className}`} data-testid="six-cards-interactive">
       {/* Header */}
       <div className="bg-gradient-to-r from-indigo-600 to-purple-600 text-white p-6 rounded-lg shadow-lg mb-6">
-        <h2 className="text-2xl font-bold mb-2">🎨 Stylesheet Builder</h2>
-        <p className="text-indigo-100">
-          Build a cohesive stylesheet: define brand colors, buttons, cards, alerts, and form states.
-          The 6 cards below are preview surfaces driven by your system colors.
-        </p>
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <h2 className="text-2xl font-bold mb-2">🎨 Stylesheet Builder</h2>
+            <p className="text-indigo-100">
+              Build a cohesive stylesheet: define brand colors, buttons, cards, alerts, and form states.
+              The 6 cards below are preview surfaces driven by your system colors.
+            </p>
+          </div>
+          <ExportActions
+            onExport={exportCSS}
+            onExportHtml={exportDemoHtml}
+            onCopyAgentInstructions={copyAgentInstructions}
+            submitStyle={{ background: `linear-gradient(135deg, ${buttonStyles.submit.bg}, ${buttonStyles.submit.hover})` }}
+            locked={!paywallUnlocked}
+            onUnlock={handleUnlock}
+          />
+        </div>
       </div>
 
-      {/* System-wide preview components bound to current theme */}
-      <ColorSystemPreview
-        theme={activeGradient.theme}
-        buttonStyles={buttonStyles}
-        alertStyles={alertStyles}
-        currentGradient={activeGradient}
-        onUpdateButtonStyle={updateButtonStyle}
-      />
+      
 
       {/* Master Theme Selection - Full Width */}
       <div className="mb-6">
         {/* Gradient System - Master Color Controller */}
         <div className="bg-gradient-to-br from-blue-50 to-purple-50 p-6 rounded-lg shadow-sm border-2 border-blue-200">
           <h3 className="text-lg font-semibold mb-2 text-gray-800 flex items-center">
-            🎨 Master Color Themes
+            🎨 Card Background Gradient & Themes
           </h3>
+          <div className="mb-3 p-3 rounded-md bg-white/70 border border-blue-200 text-xs text-blue-900">
+            These controls color the six cards below. Toggle gradient on/off and pick a theme or your custom color.
+          </div>
           <p className="text-sm text-blue-700 mb-4 font-medium">
             Choose a gradient theme to set cohesive colors for all cards, buttons, and alerts. Then fine-tune individual components below!
           </p>
-          <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-2 mb-4">
-            {Object.entries(predefinedGradients).filter(([key]) => key !== 'custom').map(([key, gradient]) => (
-              <button
-                key={key}
-                onClick={() => updateGradientOption('selectedGradient', key)}
-                className={`p-3 rounded text-xs font-medium text-white text-center transition-all ${
-                  gradientOptions.selectedGradient === key ? 'ring-4 ring-white ring-offset-2 transform scale-105' : 'hover:scale-105'
-                }`}
-                style={{
-                  background: `linear-gradient(135deg, ${gradient.start}, ${gradient.end})`
-                }}
-                data-testid={`gradient-${key}`}
-                title={`${gradient.name} Theme`}
-              >
-                {gradient.name}
-              </button>
-            ))}
-            {/* From Color Picker: link first, color button after selection */}
-            {!pickerBaseColor ? (
-              <Link
-                to="/color-picker"
-                className="p-3 rounded text-xs font-medium text-center transition-all bg-blue-100 text-blue-700 hover:bg-blue-200"
-                title="Try the color picker"
-                data-testid="gradient-from-picker-link"
-              >
-                Try the color picker
-              </Link>
-            ) : (
-              <button
-                onClick={() => updateGradientOption('selectedGradient', 'fromPicker')}
-                className={`p-3 rounded text-xs font-medium text-white text-center transition-all ${
-                  gradientOptions.selectedGradient === 'fromPicker' ? 'ring-4 ring-white ring-offset-2 transform scale-105' : 'hover:scale-105'
-                }`}
-                style={{ background: pickerBaseColor }}
-                title="Use base color from Color Picker"
-                data-testid="gradient-from-picker"
-              >
-                From Color Picker
-              </button>
-            )}
-          </div>
+          <ThemeSelector
+            presets={Object.fromEntries(Object.entries(predefinedGradients).filter(([k]) => k !== 'custom'))}
+            selectedKey={gradientOptions.selectedGradient}
+            onSelect={(key) => updateGradientOption('selectedGradient', key)}
+            pickerBaseColor={pickerBaseColor}
+            inlinePicker={{ onOpen: () => setShowInlinePicker(true) }}
+          />
           
           
           {/* Removed legacy custom panel; color picker lives in the theme grid now */}
@@ -884,23 +1136,63 @@ export const SixCardsInteractive = ({ className = '' }) => {
         </div>
       </div>
 
+      {/* System-wide preview components bound to current theme */}
+      <ColorSystemPreview
+        theme={activeGradient.theme}
+        buttonStyles={buttonStyles}
+        alertStyles={alertStyles}
+        currentGradient={activeGradient}
+        onUpdateButtonStyle={updateButtonStyle}
+      />
+
+      {/* Inline Color Picker Modal */}
+      {showInlinePicker && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          <div className="absolute inset-0 bg-black/40" onClick={() => setShowInlinePicker(false)} />
+          <div className="relative bg-white rounded-lg shadow-xl border max-w-xl w-full p-4">
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-lg font-semibold text-gray-800">Pick a base color</h3>
+              <button onClick={() => setShowInlinePicker(false)} className="text-gray-500 hover:text-gray-700">✕</button>
+            </div>
+            <ColorPicker
+              value={pickerBaseColor || '#3b82f6'}
+              onChange={(hex) => {
+                setPickerBaseColor(hex);
+              }}
+              onColorChange={(rgb, property, hex) => {
+                setPickerBaseColor(hex);
+              }}
+              property={'backgroundColor'}
+              backgroundColor={'#ffffff'}
+              showVisualPicker={true}
+              showSliders={true}
+              presets={[ '#3b82f6', '#ef4444', '#10b981', '#f59e0b', '#8b5cf6', '#0ea5e9', '#111827', '#e5e7eb' ]}
+            />
+            <div className="mt-4 flex items-center justify-end gap-2">
+              <button className="px-4 py-2 rounded border" onClick={() => setShowInlinePicker(false)}>Cancel</button>
+              <button
+                className="px-4 py-2 rounded text-white"
+                style={{ background: `linear-gradient(135deg, ${buttonStyles.submit.bg}, ${buttonStyles.submit.hover})` }}
+                onClick={() => {
+                  applyGradientTheme('fromPicker', { base: pickerBaseColor });
+                  setGradientOptions(prev => ({ ...prev, selectedGradient: 'fromPicker' }));
+                  setShowInlinePicker(false);
+                }}
+              >
+                Use this color
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Main Controls Grid */}
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-6 mb-6">
         
         {/* Card Selection & Individual Controls */}
         <div className="xl:col-span-2 bg-white p-6 rounded-lg shadow-sm border">
-          <div className="flex items-center justify-between mb-6">
-            <h3 className="text-lg font-semibold text-gray-800 flex items-center">
-              🎯 Individual Card Controls
-            </h3>
-            <button
-              onClick={exportCSS}
-              className="px-4 py-2 text-white rounded-md transition-colors font-medium hover:opacity-90"
-              style={{ background: `linear-gradient(135deg, ${buttonStyles.submit.bg}, ${buttonStyles.submit.hover})` }}
-              data-testid="export-css-button"
-            >
-              📥 Export CSS
-            </button>
+          <div className="flex items-center mb-6">
+            <h3 className="text-lg font-semibold text-gray-800 flex items-center">🎯 Individual Card Controls</h3>
           </div>
 
           {/* Card Selector */}
@@ -923,120 +1215,11 @@ export const SixCardsInteractive = ({ className = '' }) => {
           </div>
 
           {/* Current Card Controls */}
-          <div className="bg-gray-50 p-4 rounded-lg">
-            <h4 className="font-medium text-gray-800 mb-4">
-              Editing: Card {selectedCard.slice(-1)} (.{selectedCard.replace('card', 'card-')})
-              <span className="ml-2 text-sm text-gray-500">
-                After changing a color, click off the card to see it update. Then scroll down to the preview for other changes.
-              </span>
-            </h4>
-            
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-600 mb-2">
-                  Background Color
-                </label>
-                <div className="flex items-center gap-2">
-                  <input
-                    type="color"
-                    value={currentCard.backgroundColor}
-                    onChange={(e) => updateCardProperty(selectedCard, 'backgroundColor', e.target.value)}
-                    className="w-12 h-8 rounded border cursor-pointer"
-                    data-testid={`${selectedCard}-bg-color`}
-                  />
-                  <input
-                    type="text"
-                    value={currentCard.backgroundColor}
-                    onChange={(e) => updateCardProperty(selectedCard, 'backgroundColor', e.target.value)}
-                    className="flex-1 px-2 py-1 text-sm border border-gray-300 rounded"
-                    data-testid={`${selectedCard}-bg-text`}
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-600 mb-2">
-                  Border Color
-                </label>
-                <div className="flex items-center gap-2">
-                  <input
-                    type="color"
-                    value={currentCard.borderColor}
-                    onChange={(e) => updateCardProperty(selectedCard, 'borderColor', e.target.value)}
-                    className="w-12 h-8 rounded border cursor-pointer"
-                    data-testid={`${selectedCard}-border-color`}
-                  />
-                  <input
-                    type="text"
-                    value={currentCard.borderColor}
-                    onChange={(e) => updateCardProperty(selectedCard, 'borderColor', e.target.value)}
-                    className="flex-1 px-2 py-1 text-sm border border-gray-300 rounded"
-                    data-testid={`${selectedCard}-border-text`}
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-600 mb-2">
-                  Border Radius: {currentCard.borderRadius}px
-                </label>
-                <input
-                  type="range"
-                  min="0"
-                  max="24"
-                  value={currentCard.borderRadius}
-                  onChange={(e) => updateCardProperty(selectedCard, 'borderRadius', parseInt(e.target.value))}
-                  className="w-full"
-                  data-testid={`${selectedCard}-border-radius`}
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-600 mb-2">
-                  Padding: {currentCard.padding}px
-                </label>
-                <input
-                  type="range"
-                  min="8"
-                  max="32"
-                  value={currentCard.padding}
-                  onChange={(e) => updateCardProperty(selectedCard, 'padding', parseInt(e.target.value))}
-                  className="w-full"
-                  data-testid={`${selectedCard}-padding`}
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-600 mb-2">
-                  Shadow: {currentCard.shadow}px
-                </label>
-                <input
-                  type="range"
-                  min="0"
-                  max="12"
-                  value={currentCard.shadow}
-                  onChange={(e) => updateCardProperty(selectedCard, 'shadow', parseInt(e.target.value))}
-                  className="w-full"
-                  data-testid={`${selectedCard}-shadow`}
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-600 mb-2">
-                  Border Width: {currentCard.borderWidth}px
-                </label>
-                <input
-                  type="range"
-                  min="0"
-                  max="4"
-                  value={currentCard.borderWidth}
-                  onChange={(e) => updateCardProperty(selectedCard, 'borderWidth', parseInt(e.target.value))}
-                  className="w-full"
-                  data-testid={`${selectedCard}-border-width`}
-                />
-              </div>
-            </div>
-          </div>
+          <CardEditor
+            selectedCard={selectedCard}
+            card={currentCard}
+            update={(prop, val) => updateCardProperty(selectedCard, prop, val)}
+          />
         </div>
 
         {/* Buttons & Gradients */}

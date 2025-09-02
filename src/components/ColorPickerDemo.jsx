@@ -5,12 +5,13 @@ import { generateSampleHtmlContent } from '../utils/htmlContentGenerator';
 import './ColorPickerDemo.css';
 
 /**
- * ColorPickerDemo - Demonstrates ColorPicker integration with IframePreview
- * 
+ * Color Picker – free export of your color styles
+ *
  * Features:
  * - Real-time color updates in preview
  * - Multiple CSS properties (color, background-color, border-color)
- * - Integration with existing SampleHtmlTemplate
+ * - Downloadable HTML + CSS reflecting your chosen colors (free)
+ * - For component-level exports, use the Stylesheet Builder
  */
 export const ColorPickerDemo = () => {
   const [colors, setColors] = useState({
@@ -134,8 +135,8 @@ export const ColorPickerDemo = () => {
   return (
     <div className="color-picker-demo">
       <div className="demo-header">
-        <h2>Color Picker with Real-Time Preview</h2>
-        <p>Select a color property to modify, then use the color picker to see real-time changes in the preview.</p>
+        <h2>Color Picker</h2>
+        <p>Create a background, text and accent palette. Download a free HTML + CSS with your colors. For full components (cards, buttons, badges, tabs), head to the Stylesheet Builder.</p>
       </div>
 
       <div className="demo-layout">
