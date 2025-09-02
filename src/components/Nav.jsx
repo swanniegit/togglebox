@@ -15,21 +15,13 @@ export default function Nav() {
           ToggleBox
         </Link>
         <div className="bg-white rounded-lg p-1">
-          <NavLink to="/preview" className={({ isActive }) => getNavLinkClasses(isActive)}>
-            Live Preview Demo
-          </NavLink>
           <NavLink to="/interactive" className={({ isActive }) => getNavLinkClasses(isActive)}>
             🎨 Stylesheet Builder
           </NavLink>
-          <NavLink to="/playground" className={({ isActive }) => getNavLinkClasses(isActive)}>
-            Style Playground
-          </NavLink>
           <NavLink to="/color-picker" className={({ isActive }) => getNavLinkClasses(isActive)}>
-            Color Picker Demo
+            Color Picker
           </NavLink>
-          <NavLink to="/template" className={({ isActive }) => getNavLinkClasses(isActive)}>
-            Template Component
-          </NavLink>
+          {/* Hidden unfinished: preview, playground, template */}
         </div>
       </div>
     </nav>

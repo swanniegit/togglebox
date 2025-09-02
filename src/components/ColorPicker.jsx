@@ -14,6 +14,11 @@ import {
   isValidHex
 } from '../utils/colorUtils';
 import './ColorPicker.css';
+import ColorWheel from './ColorWheel';
+import ChannelSliders from './ChannelSliders';
+import PresetSwatches from './PresetSwatches';
+import useColorModel from '../hooks/useColorModel';
+import AccessibilityPanel from './AccessibilityPanel';
 
 /**
  * ColorPicker - Professional color picker component with multiple input methods
@@ -75,13 +80,7 @@ export const ColorPicker = ({
   }, [value, parseColor]);
 
   // Get current color in different formats
-  const colorFormats = useMemo(() => {
-    const hex = rgbToHex(currentColor.r, currentColor.g, currentColor.b);
-    const hsv = rgbToHsv(currentColor.r, currentColor.g, currentColor.b);
-    const hsl = rgbToHsl(currentColor.r, currentColor.g, currentColor.b);
-
-    return { hex, hsv, hsl, rgb: currentColor };
-  }, [currentColor]);
+  const colorFormats = useColorModel(currentColor);
 
   // Calculate accessibility information
   const accessibilityInfo = useMemo(() => {
@@ -316,164 +315,24 @@ export const ColorPicker = ({
 
       case 'RGB':
         return (
-          <div className="color-input-group rgb-inputs">
-            <div className="rgb-input-item">
-              <label htmlFor="rgb-r" className="color-input-label">Red</label>
-              <input
-                id="rgb-r"
-                type="number"
-                min="0"
-                max="255"
-                value={currentColor.r}
-                onChange={(e) => handleRgbInput('r', e.target.value)}
-                disabled={disabled}
-                className="color-input color-input-small"
-              />
-              {showSliders && (
-                <input
-                  type="range"
-                  min="0"
-                  max="255"
-                  value={currentColor.r}
-                  onChange={(e) => handleSliderChange('R', e.target.value, 'RGB')}
-                  disabled={disabled}
-                  className="color-slider red-slider"
-                  aria-label="Red slider"
-                />
-              )}
-            </div>
-            <div className="rgb-input-item">
-              <label htmlFor="rgb-g" className="color-input-label">Green</label>
-              <input
-                id="rgb-g"
-                type="number"
-                min="0"
-                max="255"
-                value={currentColor.g}
-                onChange={(e) => handleRgbInput('g', e.target.value)}
-                disabled={disabled}
-                className="color-input color-input-small"
-              />
-              {showSliders && (
-                <input
-                  type="range"
-                  min="0"
-                  max="255"
-                  value={currentColor.g}
-                  onChange={(e) => handleSliderChange('G', e.target.value, 'RGB')}
-                  disabled={disabled}
-                  className="color-slider green-slider"
-                  aria-label="Green slider"
-                />
-              )}
-            </div>
-            <div className="rgb-input-item">
-              <label htmlFor="rgb-b" className="color-input-label">Blue</label>
-              <input
-                id="rgb-b"
-                type="number"
-                min="0"
-                max="255"
-                value={currentColor.b}
-                onChange={(e) => handleRgbInput('b', e.target.value)}
-                disabled={disabled}
-                className="color-input color-input-small"
-              />
-              {showSliders && (
-                <input
-                  type="range"
-                  min="0"
-                  max="255"
-                  value={currentColor.b}
-                  onChange={(e) => handleSliderChange('B', e.target.value, 'RGB')}
-                  disabled={disabled}
-                  className="color-slider blue-slider"
-                  aria-label="Blue slider"
-                />
-              )}
-            </div>
-          </div>
+          <ChannelSliders
+            mode="RGB"
+            values={currentColor}
+            disabled={disabled}
+            onNumber={(k, v) => handleRgbInput(k, v)}
+            onSlider={handleSliderChange}
+          />
         );
 
       case 'HSV':
         return (
-          <div className="color-input-group hsv-inputs">
-            <div className="hsv-input-item">
-              <label htmlFor="hsv-h" className="color-input-label">Hue</label>
-              <input
-                id="hsv-h"
-                type="number"
-                min="0"
-                max="360"
-                value={colorFormats.hsv.h}
-                onChange={(e) => handleHsvInput('h', e.target.value)}
-                disabled={disabled}
-                className="color-input color-input-small"
-              />
-              {showSliders && (
-                <input
-                  type="range"
-                  min="0"
-                  max="360"
-                  value={colorFormats.hsv.h}
-                  onChange={(e) => handleSliderChange('H', e.target.value, 'HSV')}
-                  disabled={disabled}
-                  className="color-slider hue-slider"
-                  aria-label="Hue slider"
-                />
-              )}
-            </div>
-            <div className="hsv-input-item">
-              <label htmlFor="hsv-s" className="color-input-label">Saturation</label>
-              <input
-                id="hsv-s"
-                type="number"
-                min="0"
-                max="100"
-                value={colorFormats.hsv.s}
-                onChange={(e) => handleHsvInput('s', e.target.value)}
-                disabled={disabled}
-                className="color-input color-input-small"
-              />
-              {showSliders && (
-                <input
-                  type="range"
-                  min="0"
-                  max="100"
-                  value={colorFormats.hsv.s}
-                  onChange={(e) => handleSliderChange('S', e.target.value, 'HSV')}
-                  disabled={disabled}
-                  className="color-slider saturation-slider"
-                  aria-label="Saturation slider"
-                />
-              )}
-            </div>
-            <div className="hsv-input-item">
-              <label htmlFor="hsv-v" className="color-input-label">Value</label>
-              <input
-                id="hsv-v"
-                type="number"
-                min="0"
-                max="100"
-                value={colorFormats.hsv.v}
-                onChange={(e) => handleHsvInput('v', e.target.value)}
-                disabled={disabled}
-                className="color-input color-input-small"
-              />
-              {showSliders && (
-                <input
-                  type="range"
-                  min="0"
-                  max="100"
-                  value={colorFormats.hsv.v}
-                  onChange={(e) => handleSliderChange('V', e.target.value, 'HSV')}
-                  disabled={disabled}
-                  className="color-slider value-slider"
-                  aria-label="Value slider"
-                />
-              )}
-            </div>
-          </div>
+          <ChannelSliders
+            mode="HSV"
+            values={colorFormats.hsv}
+            disabled={disabled}
+            onNumber={(k, v) => handleHsvInput(k, v)}
+            onSlider={handleSliderChange}
+          />
         );
 
       default:
@@ -526,117 +385,23 @@ export const ColorPicker = ({
 
       <div className="color-picker-body">
         {showVisualPicker && (
-          <div className="visual-color-picker" data-testid="visual-color-picker">
-            <div 
-              ref={colorWheelRef}
-              className="color-wheel"
-              data-testid="color-wheel"
-              onMouseDown={handleColorWheelMouseDown}
-              onKeyDown={handleKeyDown}
-              tabIndex={disabled ? -1 : 0}
-              role="slider"
-              aria-label="Color wheel - use arrow keys to adjust hue and saturation"
-              aria-valuemin="0"
-              aria-valuemax="360"
-              aria-valuenow={colorFormats.hsv.h}
-              style={{
-                width: '200px',
-                height: '200px',
-                borderRadius: '50%',
-                background: `conic-gradient(
-                  hsl(0, 100%, 50%),
-                  hsl(60, 100%, 50%),
-                  hsl(120, 100%, 50%),
-                  hsl(180, 100%, 50%),
-                  hsl(240, 100%, 50%),
-                  hsl(300, 100%, 50%),
-                  hsl(360, 100%, 50%)
-                )`,
-                cursor: disabled ? 'not-allowed' : 'pointer',
-                position: 'relative',
-                margin: '20px auto'
-              }}
-            >
-              <div
-                className="color-wheel-pointer"
-                style={{
-                  position: 'absolute',
-                  width: '12px',
-                  height: '12px',
-                  borderRadius: '50%',
-                  border: '2px solid white',
-                  boxShadow: '0 0 4px rgba(0,0,0,0.5)',
-                  transform: 'translate(-50%, -50%)',
-                  left: `${50 + (colorFormats.hsv.s / 100 * 50) * Math.cos(colorFormats.hsv.h * Math.PI / 180)}%`,
-                  top: `${50 + (colorFormats.hsv.s / 100 * 50) * Math.sin(colorFormats.hsv.h * Math.PI / 180)}%`,
-                  pointerEvents: 'none'
-                }}
-              />
-            </div>
-            
-            <div className="lightness-slider-container">
-              <label htmlFor="lightness-slider" className="slider-label">Lightness</label>
-              <input
-                id="lightness-slider"
-                type="range"
-                min="0"
-                max="100"
-                value={colorFormats.hsv.v}
-                onChange={(e) => handleLightnessChange(e.target.value)}
-                disabled={disabled}
-                className="lightness-slider"
-                data-testid="lightness-slider"
-                aria-label="Lightness slider"
-                style={{
-                  width: '200px',
-                  background: `linear-gradient(to right, 
-                    hsl(${colorFormats.hsv.h}, ${colorFormats.hsv.s}%, 0%), 
-                    hsl(${colorFormats.hsv.h}, ${colorFormats.hsv.s}%, 100%))`
-                }}
-              />
-            </div>
-          </div>
+          <ColorWheel
+            hsv={colorFormats.hsv}
+            disabled={disabled}
+            onMouseDown={handleColorWheelMouseDown}
+            onKeyDown={handleKeyDown}
+            onLightnessChange={handleLightnessChange}
+            wheelRef={colorWheelRef}
+          />
         )}
 
         <div className="color-inputs">
           {renderInputMode()}
         </div>
 
-        {presets.length > 0 && (
-          <div className="color-presets">
-            <div className="presets-label">Presets</div>
-            <div className="presets-grid">
-              {presets.map((preset, index) => (
-                <button
-                  key={index}
-                  className="preset-color"
-                  onClick={() => handlePresetSelect(preset)}
-                  disabled={disabled}
-                  style={{ backgroundColor: preset }}
-                  title={preset}
-                  aria-label={`Select preset color ${preset}`}
-                />
-              ))}
-            </div>
-          </div>
-        )}
+        <PresetSwatches presets={presets} disabled={disabled} onSelect={handlePresetSelect} />
 
-        {accessibilityInfo && (
-          <div className="accessibility-info">
-            <div className="accessibility-title">Accessibility</div>
-            <div className="contrast-info">
-              <span>Contrast Ratio: {accessibilityInfo.contrastRatio}:1</span>
-              <div className="wcag-compliance">
-                <span className={accessibilityInfo.wcagAA ? 'wcag-pass' : 'wcag-fail'}>
-                  WCAG AA: {accessibilityInfo.wcagAA ? '✓' : '✗'}
-                </span>
-                <span className={accessibilityInfo.wcagAAA ? 'wcag-pass' : 'wcag-fail'}>
-                  WCAG AAA: {accessibilityInfo.wcagAAA ? '✓' : '✗'}
-                </span>
-              </div>
-            </div>
-          </div>
-        )}
+        <AccessibilityPanel info={accessibilityInfo} />
       </div>
 
     </div>

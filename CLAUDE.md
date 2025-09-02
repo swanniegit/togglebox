@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-ToggleBox is a real-time CSS preview engine built with React and Vite. The project demonstrates secure iframe-based CSS injection for live preview functionality with multiple demo components including color pickers and gradient builders.
+ToggleBox is a real-time CSS preview engine built with React and Vite. The project is a showcase application featuring secure iframe-based CSS injection for live preview functionality. It includes multiple interactive demos: color pickers, gradient builders, CSS playgrounds, and responsive template previews.
 
 ## Development Commands
 
@@ -49,19 +49,21 @@ The project emphasizes security for CSS/HTML injection:
 - CSP headers and sandbox attributes for security
 - Data URL generation for isolated content
 
-**PreviewDemo** (`src/components/PreviewDemo.jsx`)
-- Main demo interface with CSS editor and presets
-- Real-time preview updates using IframePreview
-- Built-in CSS themes (colorful, dark, minimal)
+**App Structure**
+- React Router with multiple demo pages: Landing (`/`), Interactive (`/interactive`), Playground (`/playground`), Color Picker (`/color-picker`), Template (`/template`)
+- Navigation component (`Nav.jsx`) provides route switching
 
-**ColorPicker** (`src/components/ColorPicker.jsx`)
-- Professional color picker with multiple input modes (HEX, RGB, HSV)
-- Accessibility features including contrast checking
-- Color validation utilities in `src/utils/colorUtils.js`
+**Interactive Demos**
+- **SixCardsInteractive** - Main interactive demo with CSS editing and live preview
+- **StylePlayground** - Advanced CSS playground with preset themes
+- **ColorPicker** & **ColorPickerDemo** - Professional color picker with validation
+- **GradientBuilder** - Interactive gradient creation tools
+- **ProInteractivePreview** - Enhanced preview with additional features
 
-**GradientBuilder** (`src/components/GradientBuilder.jsx`)
-- Interactive gradient creation with live preview
-- Multiple gradient types and direction controls
+**Content Generators**
+- Multiple HTML content generators in `src/utils/` for different demo scenarios
+- `htmlContentGenerator.js` - Core template content with security validation
+- `sixCardsHtmlGenerator.js`, `proHtmlContentGenerator.js` - Specialized content for specific demos
 
 ### Testing Strategy
 - Comprehensive test coverage in `src/components/__tests__/`
@@ -70,9 +72,11 @@ The project emphasizes security for CSS/HTML injection:
 - JSDoc environment with React Testing Library
 
 ### Utility Structure
-- `src/utils/htmlContentGenerator.js` - Secure HTML/CSS content generation
+- `src/utils/htmlContentGenerator.js` - Secure HTML/CSS content generation with validation functions
 - `src/utils/colorUtils.js` - Color manipulation and validation utilities
-- Security utilities for sanitizing CSS and HTML content
+- `src/utils/gradientUtils.js` - Gradient creation and processing utilities
+- Multiple specialized content generators for different demo components
+- Security utilities for sanitizing CSS and HTML content throughout all utilities
 
 ## Development Notes
 
@@ -96,9 +100,20 @@ The project emphasizes security for CSS/HTML injection:
 ### File Organization
 ```
 src/
-├── components/          # React components with co-located CSS
+├── components/          # React components (primarily .jsx files)
 │   ├── __tests__/      # Component test files  
-│   └── *.jsx, *.css    # Component files and styles
-├── utils/              # Utility functions and helpers
+│   └── *.jsx           # Component files
+├── utils/              # Utility functions and specialized content generators
+├── pages/              # Page components (LandingPage.jsx)
+├── main.jsx            # App entry point
+├── App.jsx             # Main app component with routing
 └── test-setup.js       # Jest configuration and custom matchers
 ```
+
+### Application Routes
+- `/` - Landing page with dynamic color schemes and feature showcase
+- `/interactive` - Main interactive demo (SixCardsInteractive)
+- `/playground` - Advanced CSS playground (StylePlayground)  
+- `/color-picker` - Dedicated color picker demo
+- `/template` - Sample HTML template component
+- `/preview` - Preview demo component
