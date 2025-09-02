@@ -1,7 +1,9 @@
 import React, { useState, useCallback, useMemo, useEffect } from 'react';
+import { Link } from 'react-router-dom';
 import { IframePreview } from './IframePreview';
 import { generateSixCardsHtmlContent } from '../utils/sixCardsHtmlGenerator';
 import { ColorPicker } from './ColorPicker';
+import ColorSystemPreview from './ColorSystemPreview';
 
 /**
  * SixCardsInteractive - Individual customizable cards system
@@ -106,6 +108,7 @@ export const SixCardsInteractive = ({ className = '' }) => {
   const [selectedCard, setSelectedCard] = useState('card1');
   const [error, setError] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [pickerBaseColor, setPickerBaseColor] = useState(null);
 
   // Predefined gradient options with comprehensive color themes
   const predefinedGradients = {
@@ -264,13 +267,70 @@ export const SixCardsInteractive = ({ className = '' }) => {
     };
   };
 
+  // Helper: create theme from color picker base (must be declared before use)
+  const generateFromPickerTheme = () => {
+    const base = pickerBaseColor || '#3b82f6';
+    const lighten = (hex, amount) => {
+      const num = parseInt(hex.replace('#', ''), 16);
+      const amt = Math.round(2.55 * amount);
+      const R = Math.min(255, (num >> 16) + amt);
+      const G = Math.min(255, (num >> 8 & 0x00FF) + amt);
+      const B = Math.min(255, (num & 0x0000FF) + amt);
+      return "#" + (0x1000000 + R * 0x10000 + G * 0x100 + B).toString(16).slice(1);
+    };
+    const start = lighten(base, 0);
+    const end = lighten(base, -20);
+    return {
+      start,
+      end,
+      name: 'From Color Picker',
+      theme: {
+        primary: base,
+        secondary: lighten(base, -15),
+        success: '#22c55e',
+        warning: '#f59e0b',
+        danger: '#ef4444',
+        cardTints: [
+          lighten(base, 85),
+          lighten(base, 70),
+          lighten(base, 60),
+          lighten(base, 50),
+          lighten(base, 40),
+          lighten(base, 30)
+        ]
+      }
+    };
+  };
+
   // Generate comprehensive CSS with 6 individual card classes
   const generatedCss = useMemo(() => {
-    const currentGradient = gradientOptions.selectedGradient === 'custom' 
-      ? generateCustomTheme() 
-      : predefinedGradients[gradientOptions.selectedGradient];
+    const currentGradient = gradientOptions.selectedGradient === 'custom'
+      ? generateCustomTheme()
+      : gradientOptions.selectedGradient === 'fromPicker'
+        ? generateFromPickerTheme()
+        : predefinedGradients[gradientOptions.selectedGradient];
     
+    const hexToRgba = (hex, alpha = 1) => {
+      const sanitized = hex.replace('#', '');
+      const bigint = parseInt(sanitized, 16);
+      const r = (bigint >> 16) & 255;
+      const g = (bigint >> 8) & 255;
+      const b = bigint & 255;
+      return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+    };
+    
+    const start = currentGradient.start;
+    const end = currentGradient.end;
+    const gradientOverlay = gradientOptions.enableGradient
+      ? `linear-gradient(${gradientOptions.direction}, ${hexToRgba(start, 0.28)}, ${hexToRgba(end, 0.28)})`
+      : null;
+    
+    const themeName = gradientOptions.selectedGradient === 'fromPicker' && pickerBaseColor
+      ? `Color Picker Base (${pickerBaseColor})`
+      : gradientOptions.selectedGradient;
+
     return `
+      /* ToggleBox Stylesheet - Theme: ${themeName} */
       /* Container Styles */
       .preview-template {
         padding: 24px;
@@ -280,7 +340,7 @@ export const SixCardsInteractive = ({ className = '' }) => {
 
       /* Individual Card Styles - Export Ready */
       .card-1 {
-        background-color: ${cards.card1.backgroundColor} !important;
+        background: ${gradientOverlay ? `${gradientOverlay}, ${cards.card1.backgroundColor}` : cards.card1.backgroundColor} !important;
         border-radius: ${cards.card1.borderRadius}px !important;
         padding: ${cards.card1.padding}px !important;
         border: ${cards.card1.borderWidth}px solid ${cards.card1.borderColor} !important;
@@ -290,7 +350,7 @@ export const SixCardsInteractive = ({ className = '' }) => {
       }
 
       .card-2 {
-        background-color: ${cards.card2.backgroundColor} !important;
+        background: ${gradientOverlay ? `${gradientOverlay}, ${cards.card2.backgroundColor}` : cards.card2.backgroundColor} !important;
         border-radius: ${cards.card2.borderRadius}px !important;
         padding: ${cards.card2.padding}px !important;
         border: ${cards.card2.borderWidth}px solid ${cards.card2.borderColor} !important;
@@ -300,7 +360,7 @@ export const SixCardsInteractive = ({ className = '' }) => {
       }
 
       .card-3 {
-        background-color: ${cards.card3.backgroundColor} !important;
+        background: ${gradientOverlay ? `${gradientOverlay}, ${cards.card3.backgroundColor}` : cards.card3.backgroundColor} !important;
         border-radius: ${cards.card3.borderRadius}px !important;
         padding: ${cards.card3.padding}px !important;
         border: ${cards.card3.borderWidth}px solid ${cards.card3.borderColor} !important;
@@ -310,7 +370,7 @@ export const SixCardsInteractive = ({ className = '' }) => {
       }
 
       .card-4 {
-        background-color: ${cards.card4.backgroundColor} !important;
+        background: ${gradientOverlay ? `${gradientOverlay}, ${cards.card4.backgroundColor}` : cards.card4.backgroundColor} !important;
         border-radius: ${cards.card4.borderRadius}px !important;
         padding: ${cards.card4.padding}px !important;
         border: ${cards.card4.borderWidth}px solid ${cards.card4.borderColor} !important;
@@ -320,7 +380,7 @@ export const SixCardsInteractive = ({ className = '' }) => {
       }
 
       .card-5 {
-        background-color: ${cards.card5.backgroundColor} !important;
+        background: ${gradientOverlay ? `${gradientOverlay}, ${cards.card5.backgroundColor}` : cards.card5.backgroundColor} !important;
         border-radius: ${cards.card5.borderRadius}px !important;
         padding: ${cards.card5.padding}px !important;
         border: ${cards.card5.borderWidth}px solid ${cards.card5.borderColor} !important;
@@ -330,7 +390,7 @@ export const SixCardsInteractive = ({ className = '' }) => {
       }
 
       .card-6 {
-        background-color: ${cards.card6.backgroundColor} !important;
+        background: ${gradientOverlay ? `${gradientOverlay}, ${cards.card6.backgroundColor}` : cards.card6.backgroundColor} !important;
         border-radius: ${cards.card6.borderRadius}px !important;
         padding: ${cards.card6.padding}px !important;
         border: ${cards.card6.borderWidth}px solid ${cards.card6.borderColor} !important;
@@ -524,7 +584,14 @@ export const SixCardsInteractive = ({ className = '' }) => {
         }
       }
     `;
-  }, [cards, buttonStyles, alertStyles, gradientOptions, generalStyles, predefinedGradients]);
+  }, [cards, buttonStyles, alertStyles, gradientOptions, generalStyles, predefinedGradients, pickerBaseColor]);
+
+  // Active gradient/theme for previews outside the iframe
+  const activeGradient = gradientOptions.selectedGradient === 'custom'
+    ? generateCustomTheme()
+    : gradientOptions.selectedGradient === 'fromPicker'
+      ? generateFromPickerTheme()
+      : predefinedGradients[gradientOptions.selectedGradient];
 
   // Generate HTML content with all 6 cards
   const htmlContent = generateSixCardsHtmlContent(alertStyles);
@@ -563,18 +630,21 @@ export const SixCardsInteractive = ({ className = '' }) => {
 
   // Apply gradient theme to all components for cohesive design
   const applyGradientTheme = (gradientKey) => {
-    const currentGradient = gradientKey === 'custom' 
-      ? generateCustomTheme() 
-      : predefinedGradients[gradientKey];
+    const currentGradient = gradientKey === 'custom'
+      ? generateCustomTheme()
+      : gradientKey === 'fromPicker'
+        ? generateFromPickerTheme()
+        : predefinedGradients[gradientKey];
     const theme = currentGradient.theme;
     
     // Update button styles based on gradient theme
     setButtonStyles({
-      primary: { bg: theme.primary, hover: theme.secondary },
-      secondary: { bg: theme.secondary, hover: theme.primary },
-      delete: { bg: theme.danger, hover: '#dc2626' },
-      submit: { bg: theme.success, hover: '#047857' },
-      ok: { bg: theme.success, hover: theme.primary },
+      // Strong separation by default
+      primary: { bg: theme.primary, hover: theme.secondary },            // brand
+      secondary: { bg: '#6b7280', hover: '#374151' },                    // neutral gray
+      delete: { bg: theme.danger, hover: '#dc2626' },                    // red
+      submit: { bg: '#8b5cf6', hover: '#7c3aed' },                       // violet
+      ok: { bg: '#22c55e', hover: '#16a34a' },                           // green
     });
 
     // Update alert styles based on gradient theme
@@ -619,6 +689,25 @@ export const SixCardsInteractive = ({ className = '' }) => {
   // Apply initial gradient theme on component mount
   useEffect(() => {
     applyGradientTheme(gradientOptions.selectedGradient);
+    // Intake color handed off from color picker demo (one-shot)
+    try {
+      const raw = localStorage.getItem('togglebox_transfer');
+      if (raw) {
+        const data = JSON.parse(raw);
+        if (data?.type === 'button' && data?.target && data?.color) {
+          updateButtonStyle(data.target, 'bg', data.color);
+          localStorage.removeItem('togglebox_transfer');
+        }
+      }
+    } catch {}
+    // Load base color from color picker, if provided
+    try {
+      const base = localStorage.getItem('togglebox_theme_color');
+      if (base) {
+        setPickerBaseColor(base);
+        localStorage.removeItem('togglebox_theme_color');
+      }
+    } catch {}
   }, []); // Only run once on mount
 
   const updateGradientOption = (property, value) => {
@@ -673,11 +762,21 @@ export const SixCardsInteractive = ({ className = '' }) => {
     <div className={`six-cards-interactive ${className}`} data-testid="six-cards-interactive">
       {/* Header */}
       <div className="bg-gradient-to-r from-indigo-600 to-purple-600 text-white p-6 rounded-lg shadow-lg mb-6">
-        <h2 className="text-2xl font-bold mb-2">🃏 Six Cards Interactive Studio</h2>
+        <h2 className="text-2xl font-bold mb-2">🎨 Stylesheet Builder</h2>
         <p className="text-indigo-100">
-          Customize 6 individual cards with independent styling. Export your stylesheet with .card-1 through .card-6 classes ready to use in your projects.
+          Build a cohesive stylesheet: define brand colors, buttons, cards, alerts, and form states.
+          The 6 cards below are preview surfaces driven by your system colors.
         </p>
       </div>
+
+      {/* System-wide preview components bound to current theme */}
+      <ColorSystemPreview
+        theme={activeGradient.theme}
+        buttonStyles={buttonStyles}
+        alertStyles={alertStyles}
+        currentGradient={activeGradient}
+        onUpdateButtonStyle={updateButtonStyle}
+      />
 
       {/* Master Theme Selection - Full Width */}
       <div className="mb-6">
@@ -690,7 +789,7 @@ export const SixCardsInteractive = ({ className = '' }) => {
             Choose a gradient theme to set cohesive colors for all cards, buttons, and alerts. Then fine-tune individual components below!
           </p>
           <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-2 mb-4">
-            {Object.entries(predefinedGradients).map(([key, gradient]) => (
+            {Object.entries(predefinedGradients).filter(([key]) => key !== 'custom').map(([key, gradient]) => (
               <button
                 key={key}
                 onClick={() => updateGradientOption('selectedGradient', key)}
@@ -706,45 +805,33 @@ export const SixCardsInteractive = ({ className = '' }) => {
                 {gradient.name}
               </button>
             ))}
+            {/* From Color Picker: link first, color button after selection */}
+            {!pickerBaseColor ? (
+              <Link
+                to="/color-picker"
+                className="p-3 rounded text-xs font-medium text-center transition-all bg-blue-100 text-blue-700 hover:bg-blue-200"
+                title="Try the color picker"
+                data-testid="gradient-from-picker-link"
+              >
+                Try the color picker
+              </Link>
+            ) : (
+              <button
+                onClick={() => updateGradientOption('selectedGradient', 'fromPicker')}
+                className={`p-3 rounded text-xs font-medium text-white text-center transition-all ${
+                  gradientOptions.selectedGradient === 'fromPicker' ? 'ring-4 ring-white ring-offset-2 transform scale-105' : 'hover:scale-105'
+                }`}
+                style={{ background: pickerBaseColor }}
+                title="Use base color from Color Picker"
+                data-testid="gradient-from-picker"
+              >
+                From Color Picker
+              </button>
+            )}
           </div>
           
-          {/* Custom Color Picker Section */}
-          <div className="bg-white/70 p-4 rounded-lg border-2 border-dashed border-blue-300 mb-4">
-            <h4 className="text-sm font-semibold text-gray-700 mb-3 flex items-center">
-              🎨 Create Your Own Rainbow
-            </h4>
-            <p className="text-xs text-gray-600 mb-3">
-              Pick 4 colors to create your custom theme. Click "Custom" above to apply it!
-            </p>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-3">
-              {Object.entries(gradientOptions.customColors).map(([key, color], index) => (
-                <div key={key} className="text-center">
-                  <label className="block text-xs font-medium text-gray-600 mb-1">
-                    Color {index + 1}
-                  </label>
-                  <input
-                    type="color"
-                    value={color}
-                    onChange={(e) => updateCustomColor(key, e.target.value)}
-                    className="w-full h-10 rounded border cursor-pointer"
-                    data-testid={`custom-${key}`}
-                    title={`Custom Color ${index + 1}`}
-                  />
-                </div>
-              ))}
-            </div>
-            <button
-              onClick={() => updateGradientOption('selectedGradient', 'custom')}
-              className={`w-full py-2 px-4 text-sm font-medium rounded transition-all ${
-                gradientOptions.selectedGradient === 'custom'
-                  ? 'bg-blue-600 text-white'
-                  : 'bg-blue-100 text-blue-700 hover:bg-blue-200'
-              }`}
-              data-testid="apply-custom-theme"
-            >
-              {gradientOptions.selectedGradient === 'custom' ? '✓ Custom Theme Active' : 'Apply Custom Theme'}
-            </button>
-          </div>
+          
+          {/* Removed legacy custom panel; color picker lives in the theme grid now */}
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
@@ -808,7 +895,8 @@ export const SixCardsInteractive = ({ className = '' }) => {
             </h3>
             <button
               onClick={exportCSS}
-              className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 transition-colors font-medium"
+              className="px-4 py-2 text-white rounded-md transition-colors font-medium hover:opacity-90"
+              style={{ background: `linear-gradient(135deg, ${buttonStyles.submit.bg}, ${buttonStyles.submit.hover})` }}
               data-testid="export-css-button"
             >
               📥 Export CSS
@@ -838,6 +926,9 @@ export const SixCardsInteractive = ({ className = '' }) => {
           <div className="bg-gray-50 p-4 rounded-lg">
             <h4 className="font-medium text-gray-800 mb-4">
               Editing: Card {selectedCard.slice(-1)} (.{selectedCard.replace('card', 'card-')})
+              <span className="ml-2 text-sm text-gray-500">
+                After changing a color, click off the card to see it update. Then scroll down to the preview for other changes.
+              </span>
             </h4>
             
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -950,26 +1041,7 @@ export const SixCardsInteractive = ({ className = '' }) => {
 
         {/* Buttons & Gradients */}
         <div className="space-y-6">
-          {/* Button System Colors */}
-          <div className="bg-white p-6 rounded-lg shadow-sm border">
-            <h3 className="text-lg font-semibold mb-4 text-gray-800 flex items-center">
-              🔘 Button Colors
-            </h3>
-            <div className="space-y-3">
-              {Object.entries(buttonStyles).map(([type, style]) => (
-                <div key={type} className="flex items-center justify-between">
-                  <span className="text-sm font-medium capitalize text-gray-700">{type}</span>
-                  <input
-                    type="color"
-                    value={style.bg}
-                    onChange={(e) => updateButtonStyle(type, 'bg', e.target.value)}
-                    className="w-8 h-8 rounded border cursor-pointer"
-                    data-testid={`button-${type}-color`}
-                  />
-                </div>
-              ))}
-            </div>
-          </div>
+          {/* Button System Colors merged into ColorSystemPreview via controls */}
 
 
           {/* General Settings */}
@@ -1044,6 +1116,7 @@ export const SixCardsInteractive = ({ className = '' }) => {
             height="800px"
             onLoad={handleIframeLoad}
             onError={handleIframeError}
+            allowScripts={false}
             className="w-full"
           />
         </div>
