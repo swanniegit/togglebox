@@ -236,6 +236,7 @@ export const PreviewDemo = ({ initialCss = '', className = '' }) => {
             height="600px"
             onLoad={handleIframeLoad}
             onError={handleIframeError}
+            allowScripts={false}
             className="w-full"
           />
         </div>

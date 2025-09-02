@@ -16,7 +16,8 @@ export const IframePreview = ({
   className = '',
   height = '600px',
   onLoad,
-  onError
+  onError,
+  allowScripts = false
 }) => {
   const iframeRef = useRef(null);
 
@@ -58,8 +59,6 @@ export const IframePreview = ({
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; img-src data: https:; font-src data: https:;">
-        <meta http-equiv="X-Content-Type-Options" content="nosniff">
-        <meta http-equiv="X-Frame-Options" content="SAMEORIGIN">
         <title>ToggleBox Preview</title>
         <style id="dynamic-css">
           /* Reset and base styles */
@@ -138,7 +137,7 @@ export const IframePreview = ({
         data-testid="preview-iframe"
         title="ToggleBox CSS Preview - Secure Sandbox Environment"
         src={iframeSrc}
-        sandbox="allow-same-origin" // Minimal permissions - no scripts, forms, or navigation
+        sandbox={allowScripts ? 'allow-same-origin allow-scripts' : 'allow-same-origin'}
         style={{
           width: '100%',
           height: height,

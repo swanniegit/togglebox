@@ -19,7 +19,7 @@ export default function Nav() {
             Live Preview Demo
           </NavLink>
           <NavLink to="/interactive" className={({ isActive }) => getNavLinkClasses(isActive)}>
-            🃏 Six Cards Studio
+            🎨 Stylesheet Builder
           </NavLink>
           <NavLink to="/playground" className={({ isActive }) => getNavLinkClasses(isActive)}>
             Style Playground

@@ -1,7 +1,7 @@
 import React, { useState, useCallback } from 'react';
 import { ColorPicker } from './ColorPicker';
 import { IframePreview } from './IframePreview';
-import { SampleHtmlTemplate } from './SampleHtmlTemplate';
+import { generateSampleHtmlContent } from '../utils/htmlContentGenerator';
 import './ColorPickerDemo.css';
 
 /**
@@ -63,8 +63,8 @@ export const ColorPickerDemo = () => {
         color: ${colors.textColor};
       }
 
-      /* Buttons */
-      .btn {
+      /* Buttons (match template) */
+      .preview-button {
         background-color: ${colors.borderColor};
         color: ${colors.textColor};
         border: 2px solid ${colors.borderColor};
@@ -75,15 +75,16 @@ export const ColorPickerDemo = () => {
         transition: all 0.2s;
       }
 
-      .btn:hover {
+      .preview-button:hover {
         background-color: ${colors.textColor};
         color: ${colors.backgroundColor};
       }
 
-      /* Cards */
-      .card {
+      /* Cards (match template) */
+      .preview-card {
         background-color: ${colors.backgroundColor};
         border: 2px solid ${colors.borderColor};
+        color: ${colors.textColor};
         border-radius: 8px;
         padding: 20px;
         margin: 20px 0;
@@ -198,7 +199,7 @@ export const ColorPickerDemo = () => {
         <div className="demo-preview">
           <h3>Live Preview:</h3>
           <IframePreview
-            htmlContent={SampleHtmlTemplate}
+            htmlContent={generateSampleHtmlContent()}
             cssContent={generatePreviewCSS()}
             height="600px"
           />
