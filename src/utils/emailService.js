@@ -63,6 +63,8 @@ const sendConfirmationEmail = async (email, token, downloadData) => {
   // Try to send via production API first
   if (window.location.hostname === 'www.togglebox.co.za' || window.location.hostname === 'togglebox.co.za') {
     try {
+      console.log('🔄 Attempting to send real email via PHP API...');
+      
       const response = await fetch('/api/email/send-confirmation.php', {
         method: 'POST',
         headers: {
@@ -75,17 +77,38 @@ const sendConfirmationEmail = async (email, token, downloadData) => {
         })
       });
 
+      const responseText = await response.text();
+      console.log('📧 Email API Response:', responseText);
+
       if (response.ok) {
-        const result = await response.json();
-        return { success: true, confirmUrl, emailSent: true };
+        try {
+          const result = JSON.parse(responseText);
+          if (result.success) {
+            console.log('✅ Email sent successfully to:', email);
+            return { success: true, confirmUrl, emailSent: true };
+          } else {
+            console.error('❌ Email API returned error:', result);
+            throw new Error(result.error || 'Email send failed');
+          }
+        } catch (parseError) {
+          console.error('❌ Failed to parse email API response:', parseError);
+          throw new Error('Invalid response from email API');
+        }
+      } else {
+        console.error('❌ Email API returned status:', response.status);
+        throw new Error(`Email API error: ${response.status}`);
       }
+      
     } catch (error) {
-      console.log('Production email API not available, falling back to demo mode');
+      console.error('❌ Email sending failed:', error.message);
+      
+      // For production, throw the error instead of falling back to demo mode
+      throw new Error(`Failed to send confirmation email: ${error.message}. Please check your email configuration.`);
     }
   }
   
-  // Fallback to demo mode for development
-  console.log('🔗 Confirmation Email (Demo Mode)');
+  // Demo mode for development only
+  console.log('🔗 Confirmation Email (Demo Mode - Development Only)');
   console.log(`To: ${email}`);
   console.log(`Confirmation URL: ${confirmUrl}`);
   console.log(`Download includes: ${downloadData.files ? downloadData.files.length : 0} files`);
