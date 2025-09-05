@@ -6,6 +6,7 @@ import { PreviewDemo } from './components/PreviewDemo';
 import { ColorPickerDemo } from './components/ColorPickerDemo';
 import { SixCardsInteractive } from './components/SixCardsInteractive';
 import { StylePlayground } from './components/StylePlayground';
+import EmailConfirmationPage from './components/EmailConfirmationPage';
 import LandingPage from './pages/LandingPage';
 
 function App() {
@@ -21,6 +22,7 @@ function App() {
             <Route path="/playground" element={<StylePlayground />} />
             <Route path="/color-picker" element={<ColorPickerDemo />} />
             <Route path="/template" element={<SampleHtmlTemplate />} />
+            <Route path="/confirm/:token" element={<EmailConfirmationPage />} />
           </Routes>
         </div>
       </div>
