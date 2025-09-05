@@ -1043,8 +1043,8 @@ ${generateSixCardsHtmlContent(alertStyles, {
     return exportDemoHtml(true); // Pass true to return string instead of download
   };
 
-  const generateAgentInstructions = () => {
-    return copyAgentInstructions(true); // Pass true to return string instead of copy
+  const generateAgentInstructions = async () => {
+    return await copyAgentInstructions(true); // Pass true to return string instead of copy
   };
 
   const handleEmailRequired = () => {
@@ -1057,7 +1057,7 @@ ${generateSixCardsHtmlContent(alertStyles, {
       const downloadData = {
         css: generateExportCSS(),
         html: generateExportHTML(),
-        agentInstructions: generateAgentInstructions(),
+        agentInstructions: await generateAgentInstructions(),
         files: ['styles.css', 'demo.html', 'agent-instructions.md']
       };
 
