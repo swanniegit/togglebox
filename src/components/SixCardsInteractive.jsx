@@ -6,8 +6,9 @@ import { ColorPicker } from './ColorPicker';
 import ColorSystemPreview from './ColorSystemPreview';
 import ThemeSelector from './ThemeSelector';
 import { consumeTransferButton, consumePickerThemeColor } from '../utils/storageBridge';
-import { startPayfastCheckout, isPayfastReady } from '../utils/payfast';
+import { registerEmailForDownload, isEmailConfirmed } from '../utils/emailService';
 import ExportActions from './ExportActions';
+import EmailRegistrationModal from './EmailRegistrationModal';
 import CardEditor from './CardEditor';
 
 /**
@@ -114,7 +115,9 @@ export const SixCardsInteractive = ({ className = '' }) => {
   const [error, setError] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
   const [pickerBaseColor, setPickerBaseColor] = useState(null);
-  const [paywallUnlocked, setPaywallUnlocked] = useState(false);
+  const [showEmailModal, setShowEmailModal] = useState(false);
+  const [emailConfirmed, setEmailConfirmed] = useState(false);
+  const [pendingDownloadAction, setPendingDownloadAction] = useState(null);
   const [showInlinePicker, setShowInlinePicker] = useState(false);
 
   // Predefined gradient options with comprehensive color themes
@@ -935,7 +938,11 @@ export const SixCardsInteractive = ({ className = '' }) => {
   };
 
   // Export CSS functionality
-  const exportCSS = () => {
+  const exportCSS = (returnData = false) => {
+    if (returnData) {
+      return generatedCss;
+    }
+    
     const blob = new Blob([generatedCss], { type: 'text/css' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -946,7 +953,7 @@ export const SixCardsInteractive = ({ className = '' }) => {
   };
 
   // Export demo index.html including all components; expects CSS file in same folder
-  const exportDemoHtml = () => {
+  const exportDemoHtml = (returnData = false) => {
     const html = `<!DOCTYPE html>
 <html lang="en">
   <head>
@@ -972,6 +979,11 @@ ${generateSixCardsHtmlContent(alertStyles, {
     </div>
   </body>
 </html>`;
+    
+    if (returnData) {
+      return html;
+    }
+    
     const blob = new Blob([html], { type: 'text/html' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -982,7 +994,7 @@ ${generateSixCardsHtmlContent(alertStyles, {
   };
 
   // Build and copy agent-safe integration instructions
-  const copyAgentInstructions = async () => {
+  const copyAgentInstructions = async (returnData = false) => {
     const themeLabel = gradientOptions.selectedGradient === 'fromPicker' && pickerBaseColor
       ? `From Color Picker (${pickerBaseColor})`
       : predefinedGradients[gradientOptions.selectedGradient]?.name || 'Custom Theme';
@@ -1011,6 +1023,10 @@ ${generateSixCardsHtmlContent(alertStyles, {
 5) Optional customization: create CSS variables on :root and map them to these classes; keep original declarations as fallbacks.
 `;
 
+    if (returnData) {
+      return instructions;
+    }
+
     try {
       await navigator.clipboard.writeText(instructions);
       window.alert('Agent instructions copied to clipboard.');
@@ -1019,19 +1035,56 @@ ${generateSixCardsHtmlContent(alertStyles, {
     }
   };
 
-  const handleUnlock = () => {
-    if (isPayfastReady()) {
-      // Start PayFast with base $10; upsell for +$5 via a follow-up flow could be added
-      startPayfastCheckout({ amount: 10.0, itemName: 'ToggleBox CSS Export', itemDescription: 'Unlock stylesheet export' });
-      // After redirect back from PayFast you can mark unlocked via server ITN; for demo, keep confirm fallback too
-    } else {
-      // Fallback confirm flow until credentials/ITN are configured
-      const confirmCss = window.confirm('Unlock CSS + Demo export for $10? Click Cancel to abort.');
-      if (!confirmCss) return;
-      const confirmAgent = window.confirm('Add AI Instructions unlock for +$5? Click OK to include, Cancel to skip.');
-      setPaywallUnlocked(true);
-      if (confirmAgent) {}
+  const generateExportCSS = () => {
+    return exportCSS(true); // Pass true to return string instead of download
+  };
+
+  const generateExportHTML = () => {
+    return exportDemoHtml(true); // Pass true to return string instead of download
+  };
+
+  const generateAgentInstructions = () => {
+    return copyAgentInstructions(true); // Pass true to return string instead of copy
+  };
+
+  const handleEmailRequired = () => {
+    setShowEmailModal(true);
+  };
+
+  const handleEmailSubmit = async (email) => {
+    try {
+      // Prepare download data
+      const downloadData = {
+        css: generateExportCSS(),
+        html: generateExportHTML(),
+        agentInstructions: generateAgentInstructions(),
+        files: ['styles.css', 'demo.html', 'agent-instructions.md']
+      };
+
+      await registerEmailForDownload(email, downloadData);
+      
+      // Check if email gets auto-confirmed (demo mode)
+      setTimeout(() => {
+        if (isEmailConfirmed(email)) {
+          setEmailConfirmed(true);
+          executePendingDownload();
+        }
+      }, 3000);
+      
+    } catch (error) {
+      throw error;
     }
+  };
+
+  const executePendingDownload = () => {
+    if (pendingDownloadAction === 'css') {
+      exportCSS();
+    } else if (pendingDownloadAction === 'html') {
+      exportDemoHtml();
+    } else if (pendingDownloadAction === 'agent') {
+      copyAgentInstructions();
+    }
+    setPendingDownloadAction(null);
   };
 
   const currentCard = cards[selectedCard];
@@ -1049,12 +1102,11 @@ ${generateSixCardsHtmlContent(alertStyles, {
             </p>
           </div>
           <ExportActions
-            onExport={exportCSS}
-            onExportHtml={exportDemoHtml}
-            onCopyAgentInstructions={copyAgentInstructions}
+            onExport={emailConfirmed ? exportCSS : () => { setPendingDownloadAction('css'); handleEmailRequired(); }}
+            onExportHtml={emailConfirmed ? exportDemoHtml : () => { setPendingDownloadAction('html'); handleEmailRequired(); }}
+            onCopyAgentInstructions={emailConfirmed ? copyAgentInstructions : () => { setPendingDownloadAction('agent'); handleEmailRequired(); }}
             submitStyle={{ background: `linear-gradient(135deg, ${buttonStyles.submit.bg}, ${buttonStyles.submit.hover})` }}
-            locked={!paywallUnlocked}
-            onUnlock={handleUnlock}
+            onEmailRequired={emailConfirmed ? null : handleEmailRequired}
           />
         </div>
       </div>
@@ -1317,6 +1369,14 @@ ${generateSixCardsHtmlContent(alertStyles, {
           </div>
         )}
       </div>
+
+      {/* Email Registration Modal */}
+      <EmailRegistrationModal
+        isOpen={showEmailModal}
+        onClose={() => setShowEmailModal(false)}
+        onSubmit={handleEmailSubmit}
+        title="Get Your Custom Stylesheet"
+      />
     </div>
   );
 };
