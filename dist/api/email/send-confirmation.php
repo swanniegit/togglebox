@@ -1,5 +1,4 @@
 <?php
-// Production email system for ToggleBox
 error_reporting(E_ALL);
 ini_set('display_errors', 1);
 
@@ -47,7 +46,10 @@ if (!$email) {
 }
 
 $token = htmlspecialchars($data['token']);
-$confirmUrl = "https://www.togglebox.co.za/confirm/" . $token;
+// Use the same domain that sent the request
+$protocol = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? "https://" : "http://";
+$domain = $_SERVER['HTTP_HOST'] ?? 'www.togglebox.co.za';
+$confirmUrl = $protocol . $domain . "/confirm/" . $token;
 
 logDebug("Processing email for: " . $email . " with token: " . $token);
 
