@@ -61,7 +61,7 @@ const sendConfirmationEmail = async (email, token, downloadData) => {
   const confirmUrl = `${EMAIL_SERVICE_CONFIG.confirmationUrl}/${token}`;
   
   // Try to send via production API first
-  if (window.location.hostname === 'www.togglebox.co.za' || window.location.hostname === 'togglebox.co.za') {
+  if (window.location.hostname.includes('togglebox.co.za')) {
     try {
       console.log('🔄 Attempting to send real email via PHP API...');
       
