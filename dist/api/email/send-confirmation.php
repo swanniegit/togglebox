@@ -11,27 +11,20 @@ function logDebug($message) {
     error_log(date('[Y-m-d H:i:s] ') . $message . "\n", 3, __DIR__ . '/email-debug.log');
 }
 
-logDebug("Email API called - Method: " . $_SERVER['REQUEST_METHOD']);
-
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
-    logDebug("OPTIONS request handled");
     exit(0);
 }
 
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
-    logDebug("Invalid method: " . $_SERVER['REQUEST_METHOD']);
     http_response_code(405);
     echo json_encode(['error' => 'Method not allowed']);
     exit;
 }
 
 $input = file_get_contents('php://input');
-logDebug("Raw input: " . $input);
-
 $data = json_decode($input, true);
 
 if (!$data || !isset($data['email']) || !isset($data['token'])) {
-    logDebug("Missing required data");
     http_response_code(400);
     echo json_encode(['error' => 'Missing required data (email, token)']);
     exit;
@@ -39,19 +32,15 @@ if (!$data || !isset($data['email']) || !isset($data['token'])) {
 
 $email = filter_var($data['email'], FILTER_VALIDATE_EMAIL);
 if (!$email) {
-    logDebug("Invalid email: " . $data['email']);
     http_response_code(400);
     echo json_encode(['error' => 'Invalid email address']);
     exit;
 }
 
 $token = htmlspecialchars($data['token']);
-// Use the same domain that sent the request
 $protocol = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? "https://" : "http://";
 $domain = $_SERVER['HTTP_HOST'] ?? 'www.togglebox.co.za';
 $confirmUrl = $protocol . $domain . "/confirm/" . $token;
-
-logDebug("Processing email for: " . $email . " with token: " . $token);
 
 $subject = "🎨 Your ToggleBox Custom CSS Download";
 $message = "
@@ -61,7 +50,7 @@ $message = "
     <style>
         body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; line-height: 1.6; color: #333; margin: 0; padding: 0; background-color: #f3f4f6; }
         .container { max-width: 600px; margin: 0 auto; padding: 20px; }
-        .header { background: linear-gradient(135deg, #4f46e5, #7c3aed); color: white; padding: 30px; text-align: center; border-radius: 12px 12px 0 0; margin: 0; }
+        .header { background: linear-gradient(135deg, #4f46e5, #7c3aed); color: white; padding: 30px; text-align: center; border-radius: 12px 12px 0 0; }
         .content { background: white; padding: 30px; border-radius: 0 0 12px 12px; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1); }
         .button { display: inline-block; background: #4f46e5; color: white; padding: 16px 32px; text-decoration: none; border-radius: 8px; margin: 20px 0; font-weight: 600; font-size: 16px; }
         .files-list { background: #f9fafb; padding: 20px; border-radius: 8px; border-left: 4px solid #4f46e5; margin: 20px 0; }
@@ -107,12 +96,9 @@ $headers = array(
     'X-Mailer: PHP/' . phpversion()
 );
 
-logDebug("Attempting to send email to: " . $email);
-
 $success = mail($email, $subject, $message, implode("\r\n", $headers));
 
 if ($success) {
-    logDebug("Email sent successfully to: " . $email);
     echo json_encode([
         'success' => true, 
         'message' => 'Confirmation email sent successfully',
@@ -120,7 +106,6 @@ if ($success) {
         'confirmUrl' => $confirmUrl
     ]);
 } else {
-    logDebug("Failed to send email to: " . $email);
     http_response_code(500);
     echo json_encode([
         'error' => 'Failed to send email', 
@@ -128,6 +113,4 @@ if ($success) {
         'email' => $email
     ]);
 }
-
-logDebug("Email API completed");
 ?>
