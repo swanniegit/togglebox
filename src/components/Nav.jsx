@@ -1,5 +1,6 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Link, NavLink } from 'react-router-dom';
+import FeedbackForm from './FeedbackForm';
 
 function getNavLinkClasses(isActive) {
   return `px-4 py-2 rounded-md font-medium transition-colors ${
@@ -8,7 +9,14 @@ function getNavLinkClasses(isActive) {
 }
 
 export default function Nav() {
+  const [showFeedbackForm, setShowFeedbackForm] = useState(false);
+
   return (
+    <>
+      <FeedbackForm 
+        isOpen={showFeedbackForm} 
+        onClose={() => setShowFeedbackForm(false)} 
+      />
     <nav className="w-full bg-white border-b">
       <div className="container mx-auto flex items-center justify-between py-4 px-4">
         <Link to="/" className="text-2xl font-bold text-gray-800">
@@ -25,7 +33,7 @@ export default function Nav() {
             {/* Hidden unfinished: preview, playground, template */}
           </div>
           <button 
-            onClick={() => window.open('mailto:christo@yellowarcher.co.za?subject=ToggleBox%20Feedback&body=Hi%20Christo,%0D%0A%0D%0AI%27d%20like%20to%20share%20some%20feedback%20about%20ToggleBox:%0D%0A%0D%0A')}
+            onClick={() => setShowFeedbackForm(true)}
             className="px-3 py-2 rounded-md text-sm font-medium text-blue-600 hover:text-blue-800 hover:bg-blue-50 transition-colors"
             title="Send feedback to Christo"
           >
@@ -34,6 +42,7 @@ export default function Nav() {
         </div>
       </div>
     </nav>
+    </>
   );
 }
 
