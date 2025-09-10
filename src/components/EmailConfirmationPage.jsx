@@ -63,11 +63,8 @@ export default function EmailConfirmationPage() {
       downloadFile(htmlBlob, 'index.html');
     }
 
-    // Download agent instructions as text file
-    if (data.agentInstructions) {
-      const instructionsBlob = new Blob([data.agentInstructions], { type: 'text/plain' });
-      downloadFile(instructionsBlob, 'agent-instructions.md');
-    }
+    // Agent instructions now require PayFast purchase
+    // They are no longer included in free email downloads
   };
 
   const downloadFile = (blob, filename) => {
@@ -163,7 +160,7 @@ export default function EmailConfirmationPage() {
               <ul className="text-sm text-gray-600 space-y-1">
                 <li>• six-cards-stylesheet.css</li>
                 <li>• index.html (demo page)</li>
-                <li>• agent-instructions.md</li>
+                <li>• AI prompts available via separate purchase</li>
               </ul>
             </div>
           )}

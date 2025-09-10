@@ -1,6 +1,6 @@
 import React from 'react';
 
-export default function ExportActions({ onExport, onExportHtml, onCopyAgentInstructions, submitStyle, onEmailRequired }) {
+export default function ExportActions({ onExport, onExportHtml, onBuyAIPrompt, submitStyle, onEmailRequired }) {
   return (
     <div className="flex flex-wrap items-center gap-2">
       {onExport && (
@@ -24,13 +24,13 @@ export default function ExportActions({ onExport, onExportHtml, onCopyAgentInstr
         </button>
       )}
 
-      {onCopyAgentInstructions && (
+      {onBuyAIPrompt && (
         <button
-          onClick={onEmailRequired ? onEmailRequired : onCopyAgentInstructions}
-          className="px-4 py-2 rounded-md bg-indigo-600 text-white hover:bg-indigo-700 transition-colors font-medium"
-          data-testid="copy-agent-instructions"
+          onClick={onBuyAIPrompt}
+          className="px-4 py-2 rounded-md bg-orange-600 text-white hover:bg-orange-700 transition-colors font-medium"
+          data-testid="buy-ai-prompt"
         >
-          🤖 Copy agent instructions
+          🤖 Buy AI Prompt (R49)
         </button>
       )}
     </div>

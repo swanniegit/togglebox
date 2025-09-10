@@ -7,6 +7,7 @@ import ColorSystemPreview from './ColorSystemPreview';
 import ThemeSelector from './ThemeSelector';
 import { consumeTransferButton, consumePickerThemeColor } from '../utils/storageBridge';
 import { registerEmailForDownload, isEmailConfirmed } from '../utils/emailService';
+import PayFastPurchase from './PayFastPurchase';
 import ExportActions from './ExportActions';
 import EmailRegistrationModal from './EmailRegistrationModal';
 import CardEditor from './CardEditor';
@@ -116,6 +117,7 @@ export const SixCardsInteractive = ({ className = '' }) => {
   const [isLoading, setIsLoading] = useState(false);
   const [pickerBaseColor, setPickerBaseColor] = useState(null);
   const [showEmailModal, setShowEmailModal] = useState(false);
+  const [showPayFastModal, setShowPayFastModal] = useState(false);
   const [emailConfirmed, setEmailConfirmed] = useState(false);
   const [pendingDownloadAction, setPendingDownloadAction] = useState(null);
   const [showInlinePicker, setShowInlinePicker] = useState(false);
@@ -1051,14 +1053,17 @@ ${generateSixCardsHtmlContent(alertStyles, {
     setShowEmailModal(true);
   };
 
+  const handleBuyAIPrompt = () => {
+    setShowPayFastModal(true);
+  };
+
   const handleEmailSubmit = async (email) => {
     try {
-      // Prepare download data
+      // Prepare download data (free tier - CSS and HTML only)
       const downloadData = {
         css: generateExportCSS(),
         html: generateExportHTML(),
-        agentInstructions: await generateAgentInstructions(),
-        files: ['styles.css', 'demo.html', 'agent-instructions.md']
+        files: ['styles.css', 'demo.html']
       };
 
       await registerEmailForDownload(email, downloadData);
@@ -1104,7 +1109,7 @@ ${generateSixCardsHtmlContent(alertStyles, {
           <ExportActions
             onExport={emailConfirmed ? exportCSS : () => { setPendingDownloadAction('css'); handleEmailRequired(); }}
             onExportHtml={emailConfirmed ? exportDemoHtml : () => { setPendingDownloadAction('html'); handleEmailRequired(); }}
-            onCopyAgentInstructions={emailConfirmed ? copyAgentInstructions : () => { setPendingDownloadAction('agent'); handleEmailRequired(); }}
+            onBuyAIPrompt={handleBuyAIPrompt}
             submitStyle={{ background: `linear-gradient(135deg, ${buttonStyles.submit.bg}, ${buttonStyles.submit.hover})` }}
             onEmailRequired={emailConfirmed ? null : handleEmailRequired}
           />
@@ -1377,6 +1382,16 @@ ${generateSixCardsHtmlContent(alertStyles, {
         onSubmit={handleEmailSubmit}
         title="Get Your Custom Stylesheet"
       />
+
+      {showPayFastModal && (
+        <PayFastPurchase
+          onClose={() => setShowPayFastModal(false)}
+          agentInstructions={generateAgentInstructions()}
+          amount="49.00"
+          itemName="ToggleBox AI Prompt"
+          itemDescription="Get the tailored AI prompt for your custom stylesheet"
+        />
+      )}
     </div>
   );
 };

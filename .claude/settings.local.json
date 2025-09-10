@@ -14,7 +14,8 @@
       "Bash(npm run dev:*)",
       "Bash(curl:*)",
       "Bash(git fetch:*)",
-      "Bash(git push:*)"
+      "Bash(git push:*)",
+      "Bash(timeout 10s npm run dev)"
     ],
     "deny": [],
     "ask": []

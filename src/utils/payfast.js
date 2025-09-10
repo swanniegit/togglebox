@@ -2,12 +2,8 @@
 // Note: For production, compute the signature server-side and validate ITN.
 
 export const isPayfastReady = () => {
-  try {
-    const env = (typeof import.meta !== 'undefined' && import.meta.env) || {};
-    return Boolean(env.VITE_PAYFAST_MERCHANT_ID && env.VITE_PAYFAST_MERCHANT_KEY);
-  } catch {
-    return false;
-  }
+  // Check if backend PayFast API is available (no credentials exposed)
+  return true; // Backend will validate credentials
 };
 
 // Attempts to start a PayFast checkout by auto-submitting a form.
@@ -21,55 +17,55 @@ export const startPayfastCheckout = async ({
   cancelUrl,
   notifyUrl,
 }) => {
-  const env = (typeof import.meta !== 'undefined' && import.meta.env) || {};
-  const endpoint = 'https://www.payfast.co.za/eng/process';
-
-  const data = {
-    merchant_id: env.VITE_PAYFAST_MERCHANT_ID || '',
-    merchant_key: env.VITE_PAYFAST_MERCHANT_KEY || '',
+  // Use secure backend API instead of exposing credentials
+  const paymentData = {
     amount: Number(amount || 0).toFixed(2),
-    item_name: itemName || 'ToggleBox Export',
-    item_description: itemDescription || 'Unlock stylesheet export for ToggleBox',
-    return_url: returnUrl || env.VITE_PAYFAST_RETURN_URL || `${window.location.origin}/?pf=return`,
-    cancel_url: cancelUrl || env.VITE_PAYFAST_CANCEL_URL || `${window.location.origin}/?pf=cancel`,
-    notify_url: notifyUrl || env.VITE_PAYFAST_NOTIFY_URL || `${window.location.origin}/api/payfast/itn`,
-    email_address: customerEmail || '',
-  };
-
-  const submit = (payload) => {
-    const form = document.createElement('form');
-    form.method = 'POST';
-    form.action = endpoint;
-    Object.entries(payload).forEach(([k, v]) => {
-      if (v === undefined || v === null || v === '') return;
-      const input = document.createElement('input');
-      input.type = 'hidden';
-      input.name = k;
-      input.value = String(v);
-      form.appendChild(input);
-    });
-    document.body.appendChild(form);
-    form.submit();
-    document.body.removeChild(form);
+    itemName: itemName || 'ToggleBox Export',
+    itemDescription: itemDescription || 'Unlock stylesheet export for ToggleBox',
+    returnUrl: returnUrl || `${window.location.origin}/payment-success`,
+    cancelUrl: cancelUrl || `${window.location.origin}/payment-cancelled`,
+    customerEmail: customerEmail || '',
   };
 
   try {
-    const res = await fetch('/api/payfast/signature', {
+    const response = await fetch('/api/payfast/create-payment.php', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(data),
+      body: JSON.stringify(paymentData),
     });
-    if (res.ok) {
-      const body = await res.json().catch(() => ({}));
-      if (body && body.signature) {
-        data.signature = body.signature;
-      }
-    }
-  } catch (e) {
-    // No server signature available; continue without (works if merchant has no passphrase)
-  }
 
-  submit(data);
+    if (!response.ok) {
+      throw new Error('Payment setup failed');
+    }
+
+    const result = await response.json();
+    if (!result.success) {
+      throw new Error(result.error || 'Payment failed');
+    }
+
+    // Auto-submit the payment form
+    const form = document.createElement('form');
+    form.method = 'POST';
+    form.action = result.paymentUrl;
+
+    Object.entries(result.paymentData).forEach(([key, value]) => {
+      if (value !== undefined && value !== null && value !== '') {
+        const input = document.createElement('input');
+        input.type = 'hidden';
+        input.name = key;
+        input.value = String(value);
+        form.appendChild(input);
+      }
+    });
+
+    document.body.appendChild(form);
+    form.submit();
+    document.body.removeChild(form);
+
+    return result;
+  } catch (error) {
+    throw new Error(`Payment failed: ${error.message}`);
+  }
 };
 
 
